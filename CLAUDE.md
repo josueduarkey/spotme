@@ -51,11 +51,11 @@ El mapa no es solo un directorio de pines: es una **representación viva del ter
 | ------------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | Frontend                              | Expo (React Native)                                                          | App móvil real, instalable en celular físico vía Expo Go (QR) para la demo, sin pelear con build nativo en 2 días |
 | Navegación                            | expo-router                                                                  | Sistema de rutas por archivos, rápido de armar el flujo de 16 pantallas                                           |
-| Mapa                                  | @rnmapbox/maps (Mapbox SDK para React Native)                                | Capas, expansión por departamento, pines custom, funciona nativo en iOS/Android                                   |
+| Mapa                                  | react-native-maps (Apple/Google Maps)                                        | Mapbox nativo no corre en Expo Go y la demo depende del QR; react-native-maps sí, con capas y pines custom        |
 | Geolocalización                       | expo-location                                                                | Permisos y ubicación del turista para geotag de fotos y cálculo de rutas                                          |
 | Cámara / galería                      | expo-image-picker                                                            | Subir foto desde cámara o galería                                                                                 |
-| Geocoding                             | Mapbox Geocoding API                                                         | Convertir dirección de negocio → lat/lng                                                                          |
-| Rutas                                 | Mapbox Directions API                                                        | Ordenar y trazar la ruta planificada                                                                              |
+| Geocoding                             | Nominatim (OpenStreetMap)                                                    | Dirección de negocio → lat/lng. Gratis, sin API key. Límite 1 req/s + header User-Agent obligatorio               |
+| Rutas                                 | OSRM público (router.project-osrm.org)                                       | Ruta multi-parada con geometría GeoJSON, duración y distancia. Gratis, sin API key. Verificado para El Salvador   |
 | Navegación externa                    | Linking de Expo a Google Maps                                                | `Linking.openURL('google.navigation:q={lat},{lng}')` o deep link universal a Maps                                 |
 | Backend/DB                            | Supabase (Postgres + Auth + Storage)                                         | Todo en uno, sin backend custom, SDK oficial de JS funciona igual en Expo                                         |
 | Imágenes placeholder de lugares       | Modelo de generación de imágenes (tipo Nano Banana / Gemini 2.5 Flash Image) | Generar imagen representativa por punto turístico mientras no haya foto real                                      |
@@ -67,9 +67,10 @@ El mapa no es solo un directorio de pines: es una **representación viva del ter
 ```
 EXPO_PUBLIC_SUPABASE_URL=
 EXPO_PUBLIC_SUPABASE_ANON_KEY=
-EXPO_PUBLIC_MAPBOX_TOKEN=
 EXPO_PUBLIC_IMAGE_GEN_API_KEY=   # si se usa generación de imágenes por API
 ```
+
+(Nominatim y OSRM no necesitan API key — se eliminó `EXPO_PUBLIC_MAPBOX_TOKEN`.)
 
 ## 2. Modelo de datos (Supabase / Postgres)
 
