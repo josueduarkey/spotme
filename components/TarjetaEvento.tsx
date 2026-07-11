@@ -1,3 +1,4 @@
+import { MapPin } from 'lucide-react-native';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { EventItem } from '../constants/mock';
@@ -24,7 +25,10 @@ export function TarjetaEvento({ evento }: Props) {
         <Text style={styles.descripcion} numberOfLines={2}>
           {evento.description}
         </Text>
-        <Text style={styles.departamento}>📍 {evento.department}</Text>
+        <View style={styles.fila}>
+          <MapPin size={12} color={Colors.acento} />
+          <Text style={styles.departamento}>{evento.department}</Text>
+        </View>
       </View>
     </View>
   );
@@ -34,12 +38,12 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     gap: Spacing.m,
-    backgroundColor: Colors.blanco,
+    backgroundColor: Colors.superficie,
     borderRadius: Radius.m,
     borderWidth: 1.5,
-    borderColor: Colors.madera,
+    borderColor: Colors.borde,
     borderBottomWidth: Peana.grosor,
-    borderBottomColor: Colors.maderaOscura,
+    borderBottomColor: Colors.bordeOscuro,
     padding: Spacing.m,
     alignItems: 'center',
   },
@@ -47,13 +51,14 @@ const styles = StyleSheet.create({
     width: 54,
     height: 60,
     borderRadius: Radius.s,
-    backgroundColor: Colors.selva,
+    backgroundColor: Colors.tinta,
     alignItems: 'center',
     justifyContent: 'center',
   },
   fechaDia: { ...Type.subtitulo, fontSize: 22, color: Colors.textoInvertido },
-  fechaMes: { ...Type.etiqueta, fontSize: 10, color: Colors.turquesa },
+  fechaMes: { ...Type.etiqueta, fontSize: 10, color: Colors.amarilloSol },
   titulo: { ...Type.cuerpoDestacado, color: Colors.texto },
   descripcion: { ...Type.nota, color: Colors.textoSuave },
-  departamento: { ...Type.nota, fontSize: 12, color: Colors.tierra, marginTop: 2 },
+  fila: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  departamento: { ...Type.nota, fontSize: 12, color: Colors.acento },
 });

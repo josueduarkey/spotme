@@ -117,13 +117,13 @@ export default function Auth() {
 }
 
 const styles = StyleSheet.create({
-  pantalla: { flex: 1, backgroundColor: Colors.crema },
+  pantalla: { flex: 1, backgroundColor: Colors.fondo },
   contenido: { padding: Spacing.l, gap: Spacing.l, flexGrow: 1 },
   encabezado: { gap: Spacing.m, marginTop: Spacing.l },
   titulo: { ...Type.titulo, color: Colors.texto },
   selector: {
     flexDirection: 'row',
-    backgroundColor: Colors.madera,
+    backgroundColor: Colors.borde,
     borderRadius: Radius.pill,
     padding: 4,
   },
@@ -133,9 +133,9 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     alignItems: 'center',
   },
-  pestanaActiva: { backgroundColor: Colors.blanco },
+  pestanaActiva: { backgroundColor: Colors.superficie },
   pestanaTexto: { ...Type.cuerpoDestacado, fontSize: 15, color: Colors.textoSuave },
-  pestanaTextoActivo: { color: Colors.turquesaOscuro },
+  pestanaTextoActivo: { color: Colors.primario },
   formulario: { gap: Spacing.m },
   error: { ...Type.nota, color: Colors.error },
 });

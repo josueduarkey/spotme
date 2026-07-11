@@ -28,12 +28,12 @@ export function Boton({ titulo, onPress, variante = 'primario', cargando, deshab
         style,
       ]}>
       {cargando ? (
-        <ActivityIndicator color={esPrimario ? Colors.blanco : Colors.turquesaOscuro} />
+        <ActivityIndicator color={esPrimario ? Colors.superficie : Colors.primario} />
       ) : (
         <Text
           style={[
             styles.texto,
-            { color: esPrimario ? Colors.blanco : esFantasma ? Colors.textoSuave : Colors.turquesaOscuro },
+            { color: esPrimario ? Colors.superficie : esFantasma ? Colors.textoSuave : Colors.primario },
           ]}>
           {titulo}
         </Text>
@@ -53,16 +53,16 @@ const styles = StyleSheet.create({
   // La sombra inferior sólida es la "peana" del sistema: los botones se
   // asientan sobre una base, como los dioramas del mapa.
   primario: {
-    backgroundColor: Colors.turquesa,
+    backgroundColor: Colors.primario,
     borderBottomWidth: Peana.grosor,
-    borderBottomColor: Colors.turquesaOscuro,
+    borderBottomColor: Colors.primarioOscuro,
   },
   secundario: {
-    backgroundColor: Colors.blanco,
+    backgroundColor: Colors.superficie,
     borderWidth: 1.5,
-    borderColor: Colors.madera,
+    borderColor: Colors.borde,
     borderBottomWidth: Peana.grosor,
-    borderBottomColor: Colors.maderaOscura,
+    borderBottomColor: Colors.bordeOscuro,
   },
   fantasma: { backgroundColor: 'transparent', minHeight: 44 },
   texto: { ...Type.cuerpoDestacado, fontSize: 17 },

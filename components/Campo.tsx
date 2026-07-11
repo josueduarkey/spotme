@@ -27,13 +27,13 @@ const styles = StyleSheet.create({
   etiqueta: { ...Type.etiqueta, color: Colors.textoSuave },
   input: {
     ...Type.cuerpo,
-    backgroundColor: Colors.blanco,
+    backgroundColor: Colors.superficie,
     borderWidth: 1.5,
-    borderColor: Colors.madera,
+    borderColor: Colors.borde,
     borderRadius: Radius.s,
     paddingHorizontal: Spacing.m,
     paddingVertical: 14,
     color: Colors.texto,
   },
-  inputEnfocado: { borderColor: Colors.turquesa },
+  inputEnfocado: { borderColor: Colors.primario },
 });

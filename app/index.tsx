@@ -34,10 +34,10 @@ export default function Splash() {
 }
 
 const styles = StyleSheet.create({
-  pantalla: { flex: 1, backgroundColor: Colors.selva },
+  pantalla: { flex: 1, backgroundColor: Colors.tinta },
   centro: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.xl, paddingHorizontal: Spacing.xl },
   marca: { alignItems: 'center', gap: Spacing.s },
-  lema: { ...Type.nota, fontSize: 15, color: Colors.turquesa, letterSpacing: 0.4 },
+  lema: { ...Type.nota, fontSize: 15, color: Colors.amarilloSol, letterSpacing: 0.4 },
   descripcion: {
     ...Type.cuerpo,
     color: Colors.textoInvertido,

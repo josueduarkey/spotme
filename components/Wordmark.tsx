@@ -7,9 +7,9 @@ interface Props {
   claro?: boolean; // sobre fondo oscuro
 }
 
-/** Wordmark "spotmi" con punto-pin turquesa sobre la i. */
+/** Wordmark "spotmi" con punto-pin naranja sol sobre la i. */
 export function Wordmark({ tamano = 44, claro = false }: Props) {
-  const color = claro ? Colors.textoInvertido : Colors.selva;
+  const color = claro ? Colors.textoInvertido : Colors.tinta;
   return (
     <View style={styles.fila}>
       <Text style={[styles.texto, { fontSize: tamano, color }]}>spotm</Text>
@@ -26,7 +26,7 @@ const styles = StyleSheet.create({
   texto: { fontFamily: Fonts.displayBold, includeFontPadding: false },
   i: { alignItems: 'center' },
   punto: {
-    backgroundColor: Colors.turquesa,
+    backgroundColor: Colors.naranjaSol,
     borderRadius: 999,
     marginBottom: 2,
   },

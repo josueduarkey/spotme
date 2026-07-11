@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import { Backpack, Store } from 'lucide-react-native';
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -32,14 +33,14 @@ export default function SeleccionCuenta() {
 
         <View style={{ gap: Spacing.m }}>
           <TarjetaSeleccion
-            emoji="🎒"
+            Icono={Backpack}
             titulo="Soy turista"
             descripcion="Descubre lugares, sube fotos, planifica rutas y gana recompensas."
             seleccionada={tipo === 'turista'}
             onPress={() => setTipo('turista')}
           />
           <TarjetaSeleccion
-            emoji="🏪"
+            Icono={Store}
             titulo="Tengo un negocio"
             descripcion="Pon tu local en el mapa y deja que los turistas te descubran."
             seleccionada={tipo === 'negocio'}
@@ -55,8 +56,8 @@ export default function SeleccionCuenta() {
 }
 
 const styles = StyleSheet.create({
-  pantalla: { flex: 1, backgroundColor: Colors.crema },
+  pantalla: { flex: 1, backgroundColor: Colors.fondo },
   contenido: { flex: 1, padding: Spacing.l, gap: Spacing.xl },
-  etiqueta: { ...Type.etiqueta, color: Colors.tierra },
+  etiqueta: { ...Type.etiqueta, color: Colors.acento },
   titulo: { ...Type.titulo, color: Colors.texto },
 });

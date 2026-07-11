@@ -21,7 +21,7 @@ export default function BusinessDashboard() {
 }
 
 const styles = StyleSheet.create({
-  pantalla: { flex: 1, backgroundColor: Colors.crema },
+  pantalla: { flex: 1, backgroundColor: Colors.fondo },
   contenido: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.m, padding: Spacing.xl },
   titulo: { ...Type.titulo, color: Colors.texto },
   nota: { ...Type.cuerpo, color: Colors.textoSuave, textAlign: 'center' },

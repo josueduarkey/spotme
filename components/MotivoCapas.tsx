@@ -8,7 +8,7 @@ interface Props {
 
 /**
  * Motivo visual del digital twin: tres capas de mapa apiladas en isométrico
- * (rombos), en los colores del torogoz. Se usa en el splash y como sello.
+ * (rombos), en los colores de la paleta. Se usa en el splash y como sello.
  */
 export function MotivoCapas({ tamano = 96 }: Props) {
   const capa = {
@@ -20,9 +20,9 @@ export function MotivoCapas({ tamano = 96 }: Props) {
   const paso = tamano * 0.24;
   return (
     <View style={{ width: tamano * 1.3, height: tamano * 0.9 + paso * 2, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={[styles.capa, capa, { backgroundColor: Colors.madera, top: paso * 2 }]} />
-      <View style={[styles.capa, capa, { backgroundColor: Colors.tierra, top: paso }]} />
-      <View style={[styles.capa, capa, { backgroundColor: Colors.turquesa, top: 0 }]} />
+      <View style={[styles.capa, capa, { backgroundColor: Colors.amarilloSol, top: paso * 2 }]} />
+      <View style={[styles.capa, capa, { backgroundColor: Colors.naranjaSol, top: paso }]} />
+      <View style={[styles.capa, capa, { backgroundColor: Colors.azulLago, top: 0 }]} />
     </View>
   );
 }

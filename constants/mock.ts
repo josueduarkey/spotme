@@ -58,11 +58,11 @@ export interface ActivityPoint {
   weight: number;
 }
 
-export const CATEGORIAS: Record<Categoria, { etiqueta: string; emoji: string }> = {
-  naturaleza: { etiqueta: 'Naturaleza', emoji: '🌿' },
-  cultura: { etiqueta: 'Cultura', emoji: '🏛️' },
-  gastronomia: { etiqueta: 'Gastronomía', emoji: '🫓' },
-  aventura: { etiqueta: 'Aventura', emoji: '🌋' },
+export const CATEGORIAS: Record<Categoria, { etiqueta: string }> = {
+  naturaleza: { etiqueta: 'Naturaleza' },
+  cultura: { etiqueta: 'Cultura' },
+  gastronomia: { etiqueta: 'Gastronomía' },
+  aventura: { etiqueta: 'Aventura' },
 };
 
 export const MOCK_PROFILE: MockProfile = {

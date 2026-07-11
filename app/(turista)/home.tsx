@@ -30,7 +30,7 @@ export default function Home() {
     <SafeAreaView style={styles.pantalla} edges={['top']}>
       <ScrollView contentContainerStyle={styles.contenido} showsVerticalScrollIndicator={false}>
         <View style={styles.encabezado}>
-          <Text style={styles.saludo}>Hola, {nombreCorto} 👋</Text>
+          <Text style={styles.saludo}>Hola, {nombreCorto}</Text>
           <Text style={styles.pregunta}>¿Qué rincón del país descubrimos hoy?</Text>
         </View>
 
@@ -70,7 +70,7 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
-  pantalla: { flex: 1, backgroundColor: Colors.crema },
+  pantalla: { flex: 1, backgroundColor: Colors.fondo },
   contenido: { gap: Spacing.l, paddingTop: Spacing.m },
   encabezado: { paddingHorizontal: Spacing.l, gap: 4 },
   saludo: { ...Type.nota, fontSize: 15, color: Colors.textoSuave },
@@ -80,14 +80,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.m,
     marginHorizontal: Spacing.l,
-    backgroundColor: Colors.selva,
+    backgroundColor: Colors.tinta,
     borderRadius: Radius.l,
     borderBottomWidth: Peana.grosor,
-    borderBottomColor: '#0B1A13',
+    borderBottomColor: Colors.tintaOscura,
     padding: Spacing.l,
   },
   ctaTitulo: { ...Type.subtitulo, color: Colors.textoInvertido },
-  ctaNota: { ...Type.nota, color: Colors.turquesa },
+  ctaNota: { ...Type.nota, color: Colors.azulLago },
   seccion: { gap: Spacing.m, paddingLeft: Spacing.l },
   seccionTitulo: { ...Type.subtitulo, color: Colors.texto, paddingRight: Spacing.l },
 });
