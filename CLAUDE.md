@@ -11,7 +11,12 @@ Hackathon de Turismo Creativo Vol. 1 — PoC construido en 2 días con dos cuent
 - Pantallas 1-3 construidas: Splash (motivo de 3 capas de mapa isométricas), Login/Registro (con tabs, validación, estados de carga/error), Selección de tipo de cuenta (cards Turista/Negocio con ruteo a stubs de Home y Dashboard).
 - Seam de auth para Cuenta B: `lib/queries/auth.ts` tiene `signIn`, `signUp`, `setAccountType` mockeados con las firmas ya definidas — Cuenta B solo reemplaza el cuerpo con Supabase real, las pantallas no cambian.
 
-**Fase 1 — Cuenta B:** pendiente de iniciar.
+**Fase 1 — Cuenta B: código listo, falta proyecto cloud 🟡**
+
+- `supabase/schema.sql` versionado: 8 tablas de la sección 2 (con lat/lng agregados a `events` porque el mock de Cuenta A los usa), RLS en todas, trigger `handle_new_user` que crea la fila de `profiles` al registrarse, y seeds idempotentes (10 lugares reales, 4 eventos, 4 retos).
+- `lib/supabase.ts`: cliente con AsyncStorage + auto-refresh de sesión en foreground. Exporta `isSupabaseConfigured`.
+- `lib/queries/auth.ts`: `signIn`/`signUp`/`setAccountType` reales con las firmas originales intactas; si no existe `.env`, caen al comportamiento mock (las pantallas de Cuenta A funcionan igual con o sin credenciales).
+- Pendiente: crear el proyecto en supabase.com, ejecutar `supabase/schema.sql` en el SQL Editor, desactivar confirmación de email en Auth (para la demo), y llenar `.env`.
 
 **Pendiente antes de Fase 2:**
 
