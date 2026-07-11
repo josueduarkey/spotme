@@ -18,6 +18,14 @@ Hackathon de Turismo Creativo Vol. 1 — PoC construido en 2 días con dos cuent
 - `lib/queries/auth.ts`: `signIn`/`signUp`/`setAccountType` reales con las firmas originales intactas; si no existe `.env`, caen al comportamiento mock (las pantallas de Cuenta A funcionan igual con o sin credenciales).
 - Hecho 2026-07-11: proyecto creado en supabase.com, schema + seeds aplicados vía pooler, `.env` local con URL y publishable key (las keys nuevas `sb_publishable_...` funcionan como anon key en supabase-js). Pendiente solo: desactivar "Confirm email" en el dashboard antes de la demo.
 
+**Fase 2 — Cuenta B: COMPLETA (salvo dioramas) 🟢**
+
+- `lib/queries/` conectado a Supabase real con las mismas firmas: `places` (con `getTopPlaces` ordenado por uploads reales), `businesses` (solo con ubicación fijada), `events` (futuros, orden cronológico), `activity` (uploads agregados en celdas de ~1 km con peso 1-10 para el heatmap). Todos con fallback a mock sin `.env`.
+- `lib/queries/geocoding.ts` nuevo: `geocodeAddress()` con Nominatim restringido a El Salvador (`countrycodes=sv`) — para el onboarding de negocio (Fase 4).
+- Seeds demo aplicados: 5 negocios y 30 fotos (capa de actividad con datos reales en DB). Verificado por REST anónimo.
+- Storage listo: buckets públicos `map-icons` (dioramas) y `uploads` (fotos UGC) con políticas en `supabase/storage.sql` (lectura pública, insert autenticado en `uploads`).
+- Pendiente: recibir los archivos de dioramas del equipo → subirlos a `map-icons` y llenar `places.map_icon_url`.
+
 **Pendiente antes de Fase 2:**
 
 - [ ] Remote de GitHub creado y ambas cuentas con acceso (ver 4.1)

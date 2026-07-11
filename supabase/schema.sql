@@ -278,3 +278,43 @@ insert into public.challenges (title, description, points_reward, type) values
   ('Guardián de la costa', 'Participa en una jornada de limpieza de playa y documenta con foto.', 200, 'environmental'),
   ('Ruta de las Flores completa', 'Visita Juayúa y 2 puntos más de la Ruta de las Flores.', 250, 'visit_places')
 on conflict (title) do nothing;
+
+-- =============== SEED: negocios demo (capa de negocios del mapa) ===============
+-- Sin owner_id (nullable): son negocios de muestra hasta que se registren reales.
+
+insert into public.businesses (name, category, description, lat, lng, address, schedule, contact)
+select v.* from (values
+  ('Café Albania', 'Cafetería',
+   'Café de altura cultivado en la Ruta de las Flores, con mirador al valle.',
+   13.8355, -89.7519, 'Km 82, carretera a Juayúa, Sonsonate', 'Lun-Dom 8:00–18:00', '+503 7000 0001'),
+  ('Pupusería La Esquina de Suchi', 'Restaurante',
+   'Pupusas de maíz azul frente al parque central de Suchitoto.',
+   13.9374, -89.0292, 'Calle Francisco Morazán, Suchitoto', 'Mié-Dom 10:00–20:00', '+503 7000 0002'),
+  ('Hostal Punta Roca', 'Hospedaje',
+   'Hostal surfero a 50 m de la playa El Tunco, con renta de tablas.',
+   13.4941, -89.3822, 'Calle principal, El Tunco, La Libertad', '24 horas', '+503 7000 0003'),
+  ('Artesanías Añil Real', 'Artesanías',
+   'Taller de teñido con añil: talleres en vivo y piezas hechas a mano.',
+   13.9391, -89.0271, 'Barrio El Centro, Suchitoto', 'Mar-Dom 9:00–17:00', '+503 7000 0004'),
+  ('Kayak Coatepeque Tours', 'Turismo',
+   'Paseos en kayak y lancha por el lago de Coatepeque al atardecer.',
+   13.8709, -89.5568, 'Muelle público, Lago de Coatepeque', 'Vie-Dom 7:00–17:00', '+503 7000 0005')
+) as v(name, category, description, lat, lng, address, schedule, contact)
+where not exists (select 1 from public.businesses b where b.name = v.name);
+
+-- =============== SEED: uploads demo (capa de actividad de turistas) ===============
+-- 1-3 fotos por lugar, atribuidas al primer perfil existente, con jitter de
+-- ~400 m para que el heatmap se vea orgánico. Solo corre si uploads está vacío.
+
+insert into public.uploads (user_id, target_type, target_id, image_url, lat, lng)
+select
+  p.id,
+  'place',
+  pl.id,
+  'https://picsum.photos/seed/spotmi-' || pl.id || '-' || n || '/800/600',
+  pl.lat + (random() - 0.5) * 0.008,
+  pl.lng + (random() - 0.5) * 0.008
+from (select id from public.profiles limit 1) p
+cross join public.places pl
+cross join lateral generate_series(1, 1 + (floor(random() * 3))::int) as n
+where not exists (select 1 from public.uploads);
