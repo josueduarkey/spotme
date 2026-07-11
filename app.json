@@ -11,6 +11,12 @@
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.spotmi.app",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBE5rKSq03ZEN8tlGbSaQhOnGgf6IIEoJ4"
+        }
+      },
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -41,6 +47,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "fdeea49e-f1f7-42f1-9e76-3b9aebcc2b39"
+      }
+    },
+    "owner": "josueduard10"
   }
 }

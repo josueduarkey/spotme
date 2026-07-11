@@ -42,3 +42,5 @@ example
 /ios
 /android
 .env
+credentials.json
+credentials/
