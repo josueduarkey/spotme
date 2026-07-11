@@ -5,8 +5,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MotivoCapas } from '../../components/MotivoCapas';
 import { TarjetaEvento } from '../../components/TarjetaEvento';
 import { TarjetaLugar } from '../../components/TarjetaLugar';
-import { EventItem, MOCK_PROFILE, Place } from '../../constants/mock';
+import { EventItem, MOCK_PROFILE, MockProfile, Place } from '../../constants/mock';
 import { Colors, Peana, Radius, Spacing, Type } from '../../constants/theme';
+import { getCurrentProfile } from '../../lib/queries/auth';
 import { getUpcomingEvents } from '../../lib/queries/events';
 import { getTopPlaces } from '../../lib/queries/places';
 
@@ -15,13 +16,15 @@ export default function Home() {
   const router = useRouter();
   const [lugares, setLugares] = useState<Place[]>([]);
   const [eventos, setEventos] = useState<EventItem[]>([]);
+  const [perfil, setPerfil] = useState<MockProfile | null>(null);
 
   useEffect(() => {
     getTopPlaces(5).then(setLugares);
     getUpcomingEvents().then(setEventos);
+    getCurrentProfile().then(setPerfil);
   }, []);
 
-  const nombreCorto = MOCK_PROFILE.fullName.split(' ')[0];
+  const nombreCorto = (perfil?.fullName || MOCK_PROFILE.fullName).split(' ')[0];
 
   return (
     <SafeAreaView style={styles.pantalla} edges={['top']}>

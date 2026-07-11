@@ -39,9 +39,12 @@ export default function Auth() {
       setError(res.error);
       return;
     }
-    // Al registrarse siempre se elige tipo de cuenta; en login real, el tipo
-    // vendrá del perfil (Cuenta B) y se saltará esta pantalla si ya existe.
-    router.push('/account-type');
+    // Si ya tiene tipo de cuenta configurado (turista o negocio), redirigimos directamente.
+    if (res.profile?.accountType) {
+      router.replace(res.profile.accountType === 'turista' ? '/home' : '/business-dashboard');
+    } else {
+      router.push('/account-type');
+    }
   }
 
   return (

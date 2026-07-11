@@ -94,6 +94,24 @@ export async function signUp(fullName: string, email: string, password: string):
   return { profile: toProfile(row, data.user.id, email, fullName.trim()), error: null };
 }
 
+export async function getCurrentProfile(): Promise<MockProfile | null> {
+  if (!isSupabaseConfigured) {
+    return MOCK_PROFILE;
+  }
+
+  const supabase = getSupabase();
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) return null;
+
+  const { data: row } = await supabase
+    .from('profiles')
+    .select('id, full_name, account_type, points')
+    .eq('id', session.user.id)
+    .single();
+
+  return toProfile(row, session.user.id, session.user.email ?? '', row?.full_name ?? '');
+}
+
 export async function setAccountType(userId: string, accountType: AccountType): Promise<{ error: string | null }> {
   if (!isSupabaseConfigured) {
     await delay(300);
@@ -101,6 +119,16 @@ export async function setAccountType(userId: string, accountType: AccountType): 
   }
 
   const supabase = getSupabase();
-  const { error } = await supabase.from('profiles').update({ account_type: accountType }).eq('id', userId);
+  let targetId = userId;
+
+  if (userId === MOCK_PROFILE.id) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      targetId = session.user.id;
+    }
+  }
+
+  const { error } = await supabase.from('profiles').update({ account_type: accountType }).eq('id', targetId);
   return { error: error ? toSpanish(error.message) : null };
 }
+
