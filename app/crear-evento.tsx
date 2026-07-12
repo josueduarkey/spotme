@@ -12,10 +12,10 @@ import {
   Text,
   View,
 } from 'react-native';
-import MapView, { Region, UrlTile } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Boton } from '../components/Boton';
 import { Campo } from '../components/Campo';
+import { MapaPickerMapbox, MapaPickerRef } from '../components/MapaPickerMapbox';
 import { Colors, Peana, Radius, Spacing, Type } from '../constants/theme';
 import { createEvent } from '../lib/queries/events';
 
@@ -33,12 +33,7 @@ try {
   Location = null;
 }
 
-const EL_SALVADOR: Region = {
-  latitude: 13.72,
-  longitude: -88.9,
-  latitudeDelta: 2.1,
-  longitudeDelta: 2.4,
-};
+const EL_SALVADOR = { latitude: 13.72, longitude: -88.9 };
 
 const HORAS = ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '19:00', '20:00'];
 const DIAS_SEMANA = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
@@ -54,7 +49,7 @@ type Paso = 1 | 2 | 3;
  */
 export default function CrearEvento() {
   const router = useRouter();
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<MapaPickerRef>(null);
 
   const [paso, setPaso] = useState<Paso>(1);
   const [coordenadas, setCoordenadas] = useState({ lat: EL_SALVADOR.latitude, lng: EL_SALVADOR.longitude });
@@ -90,10 +85,7 @@ export default function CrearEvento() {
     }
     const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
     setBuscandoUbicacion(false);
-    mapRef.current?.animateToRegion(
-      { latitude: pos.coords.latitude, longitude: pos.coords.longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 },
-      600,
-    );
+    mapRef.current?.flyTo(pos.coords.latitude, pos.coords.longitude);
   }
 
   async function tomarFoto() {
@@ -144,20 +136,16 @@ export default function CrearEvento() {
 
   return (
     <View style={styles.pantalla}>
-      {/* Paso 1 — Ubicación, mismo patrón de pin central que crear-lugar */}
+      {/* Paso 1 — Ubicación, mismo patrón de pin central que crear-lugar.
+          Mapbox (mismo look que el tab 3D Real); cae a Carto sin token. */}
       <View style={StyleSheet.absoluteFill}>
-        <MapView
+        <MapaPickerMapbox
           ref={mapRef}
-          style={StyleSheet.absoluteFill}
-          initialRegion={EL_SALVADOR}
-          onRegionChangeComplete={(r) => setCoordenadas({ lat: r.latitude, lng: r.longitude })}>
-          <UrlTile
-            urlTemplate="https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
-            shouldReplaceMapContent={true}
-            maximumZ={19}
-            tileSize={256}
-          />
-        </MapView>
+          initialLat={EL_SALVADOR.latitude}
+          initialLng={EL_SALVADOR.longitude}
+          initialZoom={7.4}
+          onCenterChange={(lat, lng) => setCoordenadas({ lat, lng })}
+        />
         <View pointerEvents="none" style={styles.pinCentro}>
           <MapPin size={40} color={Colors.rojoAnil} strokeWidth={2.2} fill={Colors.superficie} />
         </View>

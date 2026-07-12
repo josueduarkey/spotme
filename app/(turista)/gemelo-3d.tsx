@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Globe, MapPin, Compass, Landmark, Plus, Crosshair, Building2, Search } from 'lucide-react-native';
+import { Globe, MapPin, Compass, Landmark, Plus, Crosshair, Search, Map as MapaIcono } from 'lucide-react-native';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,22 +24,14 @@ import { Colors, Radius, Spacing, Type, Fonts, Peana } from '../../constants/the
 import { ChipCapa } from '../../components/ChipCapa';
 import { IconoActividad, IconoNegocio } from '../../components/iconos';
 import { Mountain } from 'lucide-react-native';
-import Constants from 'expo-constants';
 
-type Capa3D = 'lugares' | 'negocios' | 'actividad' | 'edificios';
+type Capa3D = 'lugares' | 'negocios' | 'actividad';
 
-// Recuperar API Key activa
-const GOOGLE_MAPS_API_KEY =
-  Constants.expoConfig?.android?.config?.googleMaps?.apiKey || 'AIzaSyBE5rKSq03ZEN8tlGbSaQhOnGgf6IIEoJ4';
-
-// Cesium OSM Buildings: volúmenes 3D reales por edificio (huella + altura de
-// OpenStreetMap), cobertura mundial — es lo que hace que el Centro Histórico
-// se vea "modelado" de verdad al acercarse, más allá del mallado satelital
-// de Google (cuya resolución varía fuera de las ciudades insignia). Requiere
-// un token gratuito de Cesium ion (ion.cesium.com/tokens → Add a token, sin
-// necesidad de cuenta de pago); sin token, esta capa simplemente no se ofrece
-// y el resto del gemelo 3D sigue funcionando igual.
-const CESIUM_ION_TOKEN = process.env.EXPO_PUBLIC_CESIUM_ION_TOKEN || '';
+// Migración Cesium → Mapbox GL JS (decisión del usuario 2026-07-12): mismo
+// WebView (JS puro, sin rebuild, sin @rnmapbox/maps nativo), pero el globo
+// ahora es Mapbox Standard v3 — edificios 3D, terreno con relieve y niebla.
+// Requiere token público (pk.) gratuito: account.mapbox.com → Access tokens.
+const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '';
 
 // Centro Histórico de San Salvador — el escaparate principal del gemelo 3D.
 // Coordenadas oficiales del equipo (13°41′51″ N, 89°11′25″ O).
@@ -51,8 +43,8 @@ const HITOS_CENTRO = [
 ];
 
 // Destinos destacados fijos al inicio de "Volar a un Destino" — los íconos
-// del país que mejor lucen en 3D fotorrealista. El Centro Histórico usa su
-// vuelo cinematográfico propio (fly_centro); los demás, fly_to normal.
+// del país que mejor lucen en 3D. El Centro Histórico usa su vuelo
+// cinematográfico propio (fly_centro); los demás, fly_to normal.
 const DESTINOS_DESTACADOS = [
   { name: 'Centro Histórico', lat: CENTRO_HISTORICO.lat, lng: CENTRO_HISTORICO.lng, esCentro: true },
   { name: 'Playa El Tunco', lat: 13.4933, lng: -89.3805, esCentro: false },
@@ -60,14 +52,14 @@ const DESTINOS_DESTACADOS = [
 ];
 
 /** Aviso cuando el APK instalado no trae el módulo nativo de WebView. */
-function Fallback3D() {
+function Fallback3D({ mensaje }: { mensaje?: string }) {
   return (
     <View style={styles.fallback}>
       <Globe size={44} color={Colors.acento} strokeWidth={1.8} />
-      <Text style={styles.fallbackTitulo}>Vista 3D no disponible en este build</Text>
+      <Text style={styles.fallbackTitulo}>Vista 3D no disponible</Text>
       <Text style={styles.fallbackTexto}>
-        El sobrevuelo 3D usa un módulo nativo (WebView) que no está en el APK instalado. Instala el
-        APK más reciente de EAS Build para explorarlo. El resto de la app funciona normal.
+        {mensaje ??
+          'El sobrevuelo 3D usa un módulo nativo (WebView) que no está en el APK instalado. Instala el APK más reciente de EAS Build. El resto de la app funciona normal.'}
       </Text>
     </View>
   );
@@ -93,21 +85,19 @@ class WebViewErrorBoundary extends React.Component<
   }
 }
 
-export default function Gemelo3D() {
+/**
+ * Gemelo 3D (Mapbox Standard). Se usa embebido dentro del tab "Mapa" — el
+ * switch 2D/3D vive ahí; `onVolver2D` muestra el botón de regreso a 2D.
+ * Los edificios 3D son parte integral de la vista (sin toggle).
+ */
+export default function Gemelo3D({ onVolver2D }: { onVolver2D?: () => void }) {
   const router = useRouter();
   const webViewRef = useRef<any>(null);
   const [lugares, setLugares] = useState<Place[]>([]);
   const [negocios, setNegocios] = useState<Business[]>([]);
   const [actividad, setActividad] = useState<ActivityPoint[]>([]);
-  // Las capas del twin arrancan visibles: la lectura cruzada es el punto.
-  // 'edificios' solo se activa por defecto si hay token de Cesium ion.
-  const [capasActivas, setCapasActivas] = useState<Set<Capa3D>>(
-    new Set(
-      CESIUM_ION_TOKEN
-        ? ['lugares', 'negocios', 'actividad', 'edificios']
-        : ['lugares', 'negocios', 'actividad'],
-    ),
-  );
+  // Las 3 capas del twin arrancan visibles: la lectura cruzada es el punto.
+  const [capasActivas, setCapasActivas] = useState<Set<Capa3D>>(new Set(['lugares', 'negocios', 'actividad']));
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState('');
   const [buscando, setBuscando] = useState(false);
@@ -123,7 +113,7 @@ export default function Gemelo3D() {
     }, []),
   );
 
-  /** Toggle por postMessage: no regenera el HTML, así el globo no se recarga. */
+  /** Toggle por postMessage: no regenera el HTML, así el mapa no se recarga. */
   function alternarCapa(capa: Capa3D) {
     setCapasActivas((prev) => {
       const s = new Set(prev);
@@ -136,14 +126,7 @@ export default function Gemelo3D() {
   }
 
   function centrarLugar(l: Place) {
-    // Comunicar con el WebView para volar al lugar en 3D
-    webViewRef.current?.postMessage(
-      JSON.stringify({
-        type: 'fly_to',
-        lat: l.lat,
-        lng: l.lng,
-      }),
-    );
+    webViewRef.current?.postMessage(JSON.stringify({ type: 'fly_to', lat: l.lat, lng: l.lng }));
   }
 
   /** Vuela la cámara 3D al Centro Histórico (nuestro escaparate principal). */
@@ -166,7 +149,7 @@ export default function Gemelo3D() {
     webViewRef.current?.postMessage(JSON.stringify({ type: 'fly_to', lat: primero.lat, lng: primero.lng }));
   }
 
-  /** Pide a Cesium la coordenada real bajo la mira central del globo 3D. */
+  /** Pide al mapa la coordenada bajo la mira central. */
   function crearAqui() {
     webViewRef.current?.postMessage(JSON.stringify({ type: 'request_center_coord' }));
   }
@@ -175,38 +158,21 @@ export default function Gemelo3D() {
     try {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'marker_click' && data.id) {
-        // Al tocar un pin en el gemelo 3D, abrimos su ficha en React Native
-        router.push({
-          pathname: '/ficha/[id]',
-          params: { id: data.id, tipo: 'lugar' },
-        });
+        router.push({ pathname: '/ficha/[id]', params: { id: data.id, tipo: 'lugar' } });
       }
       if (data.type === 'business_click' && data.id) {
-        router.push({
-          pathname: '/ficha/[id]',
-          params: { id: data.id, tipo: 'negocio' },
-        });
+        router.push({ pathname: '/ficha/[id]', params: { id: data.id, tipo: 'negocio' } });
       }
-      // Coordenada leída bajo la mira central del gemelo 3D → crear lugar ahí.
-      // El puente de lat/lng lo consume crear-lugar.tsx (useLocalSearchParams).
+      // Coordenada bajo la mira central → crear lugar ahí (puente a crear-lugar).
       if (data.type === 'center_coord') {
-        router.push({
-          pathname: '/crear-lugar',
-          params: { lat: String(data.lat), lng: String(data.lng) },
-        });
-      }
-      if (data.type === 'center_coord_fail') {
-        Alert.alert(
-          'No se pudo leer la coordenada',
-          'Acerca un poco la cámara al suelo y vuelve a intentar "Crear aquí".',
-        );
+        router.push({ pathname: '/crear-lugar', params: { lat: String(data.lat), lng: String(data.lng) } });
       }
     } catch (e) {
       console.warn('WebView Message Error:', e);
     }
   }
 
-  // HTML embebido para CesiumJS + Google Photorealistic 3D Tiles
+  // HTML embebido: Mapbox GL JS v3 con estilo Standard (edificios 3D + terreno)
   const generateHTML = () => {
     const placesJson = JSON.stringify(
       lugares.map((l) => ({
@@ -234,298 +200,190 @@ export default function Gemelo3D() {
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no">
         <title>Gemelo 3D El Salvador</title>
-        <link href="https://cesium.com/downloads/cesiumjs/releases/1.110/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
-        <script src="https://cesium.com/downloads/cesiumjs/releases/1.110/Build/Cesium/Cesium.js"></script>
+        <link href="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.css" rel="stylesheet">
+        <script src="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.js"></script>
         <style>
-          html, body, #cesiumContainer {
-            width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
-            background-color: #000;
-          }
+          html, body, #map { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: #0b1512; }
           #loading {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            color: #ffffff; font-family: sans-serif; font-size: 14px; pointer-events: none;
-            z-index: 10; font-weight: bold; text-shadow: 0px 2px 4px rgba(0,0,0,0.8);
-            text-align: center;
+            color: #fff; font-family: sans-serif; font-size: 14px; font-weight: bold;
+            text-shadow: 0 2px 4px rgba(0,0,0,.8); z-index: 10; pointer-events: none; text-align: center;
+            transition: opacity .4s;
+          }
+          .mapboxgl-ctrl-logo, .mapboxgl-ctrl-attrib { opacity: .35; }
+          .marker-wrap { display: flex; flex-direction: column; align-items: center; cursor: pointer; }
+          .pin {
+            width: 16px; height: 16px; border-radius: 50%;
+            border: 2.5px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.45);
+          }
+          .marker-label {
+            margin-top: 3px; font: bold 11px sans-serif; color: #fff; white-space: nowrap;
+            text-shadow: 0 1px 3px rgba(0,0,0,.9), 0 0 6px rgba(0,0,0,.6);
+            max-width: 140px; overflow: hidden; text-overflow: ellipsis;
           }
         </style>
       </head>
       <body>
-        <div id="loading">Renderizando Gemelo Digital 3D (Cesium)...</div>
-        <div id="cesiumContainer"></div>
+        <div id="loading">Renderizando Gemelo Digital 3D…</div>
+        <div id="map"></div>
         <script>
-          (async () => {
-            const API_KEY = "${GOOGLE_MAPS_API_KEY}";
-            const CESIUM_ION_TOKEN = "${CESIUM_ION_TOKEN}";
-            if (CESIUM_ION_TOKEN) Cesium.Ion.defaultAccessToken = CESIUM_ION_TOKEN;
+          mapboxgl.accessToken = "${MAPBOX_TOKEN}";
+          const CENTRO = ${centroJson};
 
-            // Inicializar visor Cesium limpio sin barras de controles web
-            const viewer = new Cesium.Viewer('cesiumContainer', {
-              animation: false,
-              baseLayerPicker: false,
-              fullscreenButton: false,
-              geocoder: false,
-              homeButton: false,
-              infoBox: false,
-              sceneModePicker: false,
-              selectionIndicator: false,
-              timeline: false,
-              navigationHelpButton: false,
-              scene3DOnly: true,
+          const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/standard',
+            center: [CENTRO.lng, CENTRO.lat],
+            zoom: 16.2,
+            pitch: 62,
+            bearing: -17,
+            antialias: true,
+            attributionControl: false
+          });
+
+          map.on('load', () => {
+            const loader = document.getElementById('loading');
+            if (loader) loader.style.opacity = '0';
+          });
+          map.on('error', (e) => {
+            const loader = document.getElementById('loading');
+            if (loader && e && e.error && /access token|401|403/i.test(String(e.error.message))) {
+              loader.innerText = 'Token de Mapbox inválido o vencido. Revisa EXPO_PUBLIC_MAPBOX_TOKEN.';
+              loader.style.opacity = '1';
+            }
+          });
+
+          // Terreno con relieve real (los volcanes se levantan de verdad) + el
+          // estilo Standard ya trae edificios 3D y niebla atmosférica.
+          map.on('style.load', () => {
+            // Edificios 3D SIEMPRE activos: son parte integral de la vista 3D.
+            try { map.setConfigProperty('basemap', 'show3dObjects', true); } catch (e) {}
+            map.addSource('mapbox-dem', {
+              type: 'raster-dem',
+              url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
+              tileSize: 512,
+              maxzoom: 14
             });
+            map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.35 });
 
-            if (viewer.creditContainer) {
-              viewer.creditContainer.style.display = 'none';
-            }
-
-            // Cargar los 3D Tiles Fotorrealistas de Google Maps Platform
-            try {
-              const tileset = await Cesium.Cesium3DTileset.fromUrl(
-                "https://tile.googleapis.com/v1/3dtiles/root.json?key=" + API_KEY
-              );
-              viewer.scene.primitives.add(tileset);
-            } catch (error) {
-              console.error("Error al cargar 3D Tiles:", error);
-              const loader = document.getElementById('loading');
-              if (loader) loader.innerText = 'No se pudieron cargar los tiles 3D. Revisa conexión o la Map Tiles API.';
-            }
-
-            // Cesium OSM Buildings: edificios reales (huella + altura de OSM) en
-            // volumen 3D real, no solo mallado satelital — se nota especialmente
-            // al acercarse al Centro Histórico. Requiere token de Cesium ion.
-            let edificiosTileset = null;
-            if (CESIUM_ION_TOKEN) {
-              try {
-                edificiosTileset = await Cesium.createOsmBuildingsAsync();
-                edificiosTileset.show = ${capasActivas.has('edificios') ? 'true' : 'false'};
-                viewer.scene.primitives.add(edificiosTileset);
-              } catch (error) {
-                console.error('Error al cargar OSM Buildings:', error);
-              }
-            }
-
-            // Ocultar cargador
-            setTimeout(() => {
-              const loader = document.getElementById('loading');
-              if (loader) loader.style.opacity = '0';
-            }, 3000);
-
-            // El Centro Histórico es nuestro escaparate: vuelo cinematográfico
-            // en perspectiva oblicua sobre la Plaza Cívica (Catedral + Palacio).
-            const CENTRO = ${centroJson};
-            // OJO: la altura es ELIPSOIDAL (absoluta). El Centro Histórico está a
-            // ~660 m sobre el nivel del mar: una cámara por debajo de eso nace
-            // ENTERRADA en el relieve (pantalla negra / vista desde abajo).
-            function volarCentro(animado) {
-              const opts = {
-                destination: Cesium.Cartesian3.fromDegrees(CENTRO.lng, CENTRO.lat - 0.006, 1200),
-                orientation: {
-                  heading: Cesium.Math.toRadians(0.0),
-                  pitch: Cesium.Math.toRadians(-35.0),
-                  roll: 0.0
-                }
-              };
-              if (animado) { opts.duration = 2.5; viewer.camera.flyTo(opts); }
-              else { viewer.camera.setView(opts); }
-            }
-            volarCentro(false);
-
-            // ===== Capas del twin: mismas 3 capas cruzadas que el mapa 2D =====
-            // Cada entidad se registra en su capa para poder togglearla sin
-            // recargar el globo (mensaje 'toggle_layer' desde React Native).
-            const layers = { lugares: [], negocios: [], actividad: [], hitos: [] };
-
-            // Hitos del Centro Histórico (pines dorados, siempre visibles): son
-            // el ancla narrativa del escaparate 3D ante el jurado.
-            const hitos = ${hitosJson};
-            const pinHito = new Cesium.PinBuilder();
-            for (const h of hitos) {
-              const e = viewer.entities.add({
-                id: 'hito-' + h.name,
-                position: Cesium.Cartesian3.fromDegrees(h.lng, h.lat, 700),
-                billboard: {
-                  image: pinHito.fromColor(Cesium.Color.fromCssColorString('#C9A227'), 30).toDataURL(),
-                  verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-                  heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND
-                },
-                label: {
-                  text: h.name,
-                  font: 'bold 12px sans-serif',
-                  fillColor: Cesium.Color.WHITE,
-                  outlineColor: Cesium.Color.fromCssColorString('#7A5C00'),
-                  outlineWidth: 4,
-                  style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-                  verticalOrigin: Cesium.VerticalOrigin.TOP,
-                  pixelOffset: new Cesium.Cartesian2(0, 6),
-                  heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND
-                }
-              });
-              layers.hitos.push(e);
-            }
-
-            // Capa de negocios (pines azules)
-            const negocios = ${businessesJson};
-            const pinNegocios = new Cesium.PinBuilder();
-            for (const n of negocios) {
-              const e = viewer.entities.add({
-                id: 'biz-' + n.id,
-                position: Cesium.Cartesian3.fromDegrees(n.lng, n.lat, 640),
-                billboard: {
-                  image: pinNegocios.fromColor(Cesium.Color.fromCssColorString('#1A54A6'), 26).toDataURL(),
-                  verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-                  heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND
-                },
-                label: {
-                  text: n.name,
-                  font: 'bold 10px sans-serif',
-                  fillColor: Cesium.Color.WHITE,
-                  outlineColor: Cesium.Color.fromCssColorString('#1A54A6'),
-                  outlineWidth: 3,
-                  style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-                  verticalOrigin: Cesium.VerticalOrigin.TOP,
-                  pixelOffset: new Cesium.Cartesian2(0, 4),
-                  heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND
-                }
-              });
-              layers.negocios.push(e);
-            }
-
-            // Capa de actividad de turistas (círculos naranjas, radio por peso)
+            // Capa de actividad de turistas (círculos naranjas por peso)
             const actividad = ${activityJson};
-            for (const a of actividad) {
-              const e = viewer.entities.add({
-                position: Cesium.Cartesian3.fromDegrees(a.lng, a.lat),
-                ellipse: {
-                  semiMajorAxis: 400 + a.weight * 160,
-                  semiMinorAxis: 400 + a.weight * 160,
-                  material: Cesium.Color.fromCssColorString('#E67E22').withAlpha(0.30),
-                  outline: true,
-                  outlineColor: Cesium.Color.fromCssColorString('#E67E22').withAlpha(0.6),
-                  heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
-                }
-              });
-              layers.actividad.push(e);
+            map.addSource('actividad', {
+              type: 'geojson',
+              data: {
+                type: 'FeatureCollection',
+                features: actividad.map(a => ({
+                  type: 'Feature',
+                  geometry: { type: 'Point', coordinates: [a.lng, a.lat] },
+                  properties: { weight: a.weight }
+                }))
+              }
+            });
+            map.addLayer({
+              id: 'actividad-circulos',
+              type: 'circle',
+              source: 'actividad',
+              paint: {
+                'circle-radius': ['+', 12, ['*', ['get', 'weight'], 2.5]],
+                'circle-color': '#E67E22',
+                'circle-opacity': 0.3,
+                'circle-stroke-width': 2,
+                'circle-stroke-color': '#E67E22',
+                'circle-stroke-opacity': 0.6
+              }
+            });
+            aplicarVisibilidadActividad();
+          });
+
+          // ===== Capas de marcadores (mismas 3 capas cruzadas que el mapa 2D) =====
+          const layers = { lugares: [], negocios: [] };
+          let actividadVisible = ${capasActivas.has('actividad') ? 'true' : 'false'};
+
+          function crearMarcador(lng, lat, color, nombre, onClick) {
+            const wrap = document.createElement('div');
+            wrap.className = 'marker-wrap';
+            const pin = document.createElement('div');
+            pin.className = 'pin';
+            pin.style.background = color;
+            const label = document.createElement('div');
+            label.className = 'marker-label';
+            label.textContent = nombre;
+            wrap.appendChild(pin);
+            wrap.appendChild(label);
+            if (onClick) wrap.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
+            const marker = new mapboxgl.Marker({ element: wrap, anchor: 'bottom' })
+              .setLngLat([lng, lat])
+              .addTo(map);
+            return { marker, wrap };
+          }
+
+          // Hitos dorados del Centro Histórico (ancla narrativa, siempre visibles)
+          for (const h of ${hitosJson}) {
+            crearMarcador(h.lng, h.lat, '#C9A227', h.name, null);
+          }
+
+          // Lugares del twin: turquesa (oficial/verificado) vs tierra (nuevo)
+          for (const m of ${placesJson}) {
+            const color = (m.source === 'community' && !m.isVerified) ? '#C75B39' : '#0E9AA3';
+            const { wrap } = crearMarcador(m.lng, m.lat, color, m.name, () => {
+              window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'marker_click', id: m.id }));
+            });
+            layers.lugares.push(wrap);
+          }
+
+          // Negocios (azul)
+          for (const n of ${businessesJson}) {
+            const { wrap } = crearMarcador(n.lng, n.lat, '#1A54A6', n.name, () => {
+              window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'business_click', id: n.id }));
+            });
+            layers.negocios.push(wrap);
+          }
+
+          function aplicarVisibilidadActividad() {
+            if (map.getLayer('actividad-circulos')) {
+              map.setLayoutProperty('actividad-circulos', 'visibility', actividadVisible ? 'visible' : 'none');
             }
+          }
 
-            // Cargar pines interactivos de los lugares del Twin
-            const pinBuilder = new Cesium.PinBuilder();
-            const markers = ${placesJson};
+          function volarCentro() {
+            map.flyTo({ center: [CENTRO.lng, CENTRO.lat], zoom: 16.5, pitch: 65, bearing: -17, duration: 2500 });
+          }
 
-            for (const m of markers) {
-              let color = Cesium.Color.fromCssColorString('#0E9AA3'); // Turquesa: Oficial o Comunidad Verificado
-              if (m.source === 'community' && !m.isVerified) {
-                color = Cesium.Color.fromCssColorString('#C75B39'); // Tierra: Nuevo / Sin Verificar
-              }
-              
-              const pin = pinBuilder.fromColor(color, 32).toDataURL();
-
-              const e = viewer.entities.add({
-                id: m.id,
-                // Elevar un poco los marcadores sobre el relieve 3D
-                position: Cesium.Cartesian3.fromDegrees(m.lng, m.lat, m.source === 'official' ? 680 : 660),
-                billboard: {
-                  image: pin,
-                  verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-                  heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND
-                },
-                label: {
-                  text: m.name,
-                  font: 'bold 11px sans-serif',
-                  fillColor: Cesium.Color.WHITE,
-                  outlineColor: Cesium.Color.fromCssColorString('#152A20'),
-                  outlineWidth: 3,
-                  style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-                  verticalOrigin: Cesium.VerticalOrigin.TOP,
-                  pixelOffset: new Cesium.Cartesian2(0, 6),
-                  heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND
+          // Handler de mensajes desde React Native.
+          // OJO: en Android el WebView entrega postMessage en 'document', en iOS
+          // en 'window' — escuchar en los dos o los botones mueren en Android.
+          const onNativeMessage = (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              if (data.type === 'toggle_layer') {
+                if (data.layer === 'actividad') {
+                  actividadVisible = !!data.visible;
+                  aplicarVisibilidadActividad();
+                } else if (layers[data.layer]) {
+                  for (const el of layers[data.layer]) el.style.display = data.visible ? 'flex' : 'none';
                 }
-              });
-              layers.lugares.push(e);
+              }
+              if (data.type === 'fly_centro') volarCentro();
+              if (data.type === 'fly_to') {
+                map.flyTo({ center: [data.lng, data.lat], zoom: 13.8, pitch: 58, bearing: 0, duration: 2000 });
+              }
+              if (data.type === 'request_center_coord') {
+                const c = map.getCenter();
+                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'center_coord', lat: c.lat, lng: c.lng }));
+              }
+            } catch (e) {
+              console.error(e);
             }
-
-            // Handler para clicks en marcadores 3D
-            const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-            handler.setInputAction((click) => {
-              const pickedObject = viewer.scene.pick(click.position);
-              if (Cesium.defined(pickedObject) && Cesium.defined(pickedObject.id)) {
-                const entityId = pickedObject.id.id;
-                if (typeof entityId === 'string' && entityId.startsWith('biz-')) {
-                  window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'business_click', id: entityId.slice(4) }));
-                } else if (entityId) {
-                  window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'marker_click', id: entityId }));
-                }
-              }
-            }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-
-            // Lee la coordenada real (con relieve) bajo un píxel del globo 3D.
-            // Prefiere pickPosition contra los 3D Tiles; cae al elipsoide si el
-            // depth-picking no está disponible en este WebView.
-            function coordAtPixel(pixel) {
-              let cart;
-              if (viewer.scene.pickPositionSupported) {
-                cart = viewer.scene.pickPosition(pixel);
-              }
-              if (!Cesium.defined(cart)) {
-                cart = viewer.camera.pickEllipsoid(pixel, viewer.scene.globe.ellipsoid);
-              }
-              if (!Cesium.defined(cart)) return null;
-              const c = Cesium.Cartographic.fromCartesian(cart);
-              return {
-                lat: Cesium.Math.toDegrees(c.latitude),
-                lng: Cesium.Math.toDegrees(c.longitude)
-              };
-            }
-
-            // Handler para mensajes del contenedor móvil (React Native).
-            // OJO: en Android el WebView entrega postMessage en 'document', en
-            // iOS en 'window' — hay que escuchar en los dos o los botones
-            // (Centro Histórico, Crear aquí, toggles) mueren en Android.
-            const onNativeMessage = (event) => {
-              try {
-                const data = JSON.parse(event.data);
-                if (data.type === 'toggle_layer' && data.layer === 'edificios') {
-                  if (edificiosTileset) edificiosTileset.show = !!data.visible;
-                } else if (data.type === 'toggle_layer' && layers[data.layer]) {
-                  for (const e of layers[data.layer]) e.show = !!data.visible;
-                }
-                if (data.type === 'fly_centro') {
-                  volarCentro(true);
-                }
-                if (data.type === 'request_center_coord') {
-                  const canvas = viewer.scene.canvas;
-                  const px = new Cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2);
-                  const c = coordAtPixel(px);
-                  window.ReactNativeWebView.postMessage(JSON.stringify(
-                    c ? { type: 'center_coord', lat: c.lat, lng: c.lng } : { type: 'center_coord_fail' }
-                  ));
-                }
-                if (data.type === 'fly_to') {
-                  // Volar al destino en 3D. Altura absoluta segura para todo el
-                  // país: el punto más alto de El Salvador es ~2730 m (El Pital);
-                  // 3200 m garantiza no nacer dentro del relieve en ningún destino.
-                  viewer.camera.flyTo({
-                    destination: Cesium.Cartesian3.fromDegrees(data.lng, data.lat - 0.012, 3200),
-                    orientation: {
-                      heading: Cesium.Math.toRadians(0.0),
-                      pitch: Cesium.Math.toRadians(-40.0),
-                      roll: 0.0
-                    },
-                    duration: 2.0
-                  });
-                }
-              } catch (e) {
-                console.error(e);
-              }
-            };
-            window.addEventListener('message', onNativeMessage);
-            document.addEventListener('message', onNativeMessage);
-          })();
+          };
+          window.addEventListener('message', onNativeMessage);
+          document.addEventListener('message', onNativeMessage);
         </script>
       </body>
       </html>
     `;
   };
 
-  // Memoizado: togglear capas o re-renders no regeneran el HTML (el globo no
+  // Memoizado: togglear capas o re-renders no regeneran el HTML (el mapa no
   // se recarga); solo cambia si cambian los datos de las capas.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const htmlSource = useMemo(() => ({ html: generateHTML() }), [lugares, negocios, actividad]);
@@ -571,25 +429,7 @@ export default function Gemelo3D() {
           activa={capasActivas.has('actividad')}
           onPress={() => alternarCapa('actividad')}
         />
-        {!!CESIUM_ION_TOKEN && (
-          <ChipCapa
-            etiqueta="Edificios 3D"
-            Icono={Building2}
-            activa={capasActivas.has('edificios')}
-            onPress={() => alternarCapa('edificios')}
-          />
-        )}
       </ScrollView>
-
-      {!CESIUM_ION_TOKEN && (
-        <View style={styles.avisoToken}>
-          <Building2 size={14} color={Colors.acento} strokeWidth={2.2} />
-          <Text style={styles.avisoTokenTexto}>
-            Falta el token gratuito de Cesium ion para ver edificios 3D reales del Centro Histórico
-            (EXPO_PUBLIC_CESIUM_ION_TOKEN en .env — sin costo, en ion.cesium.com/tokens).
-          </Text>
-        </View>
-      )}
 
       {/* Visor 3D */}
       <View style={styles.visorContainer}>
@@ -598,6 +438,8 @@ export default function Gemelo3D() {
             <ActivityIndicator size="large" color={Colors.primario} />
             <Text style={styles.cargandoTexto}>Consultando Base de Datos...</Text>
           </View>
+        ) : !MAPBOX_TOKEN ? (
+          <Fallback3D mensaje="Falta el token público de Mapbox. Crea uno gratis en account.mapbox.com → Access tokens y agrégalo al .env como EXPO_PUBLIC_MAPBOX_TOKEN (empieza con pk.). Luego reinicia Metro." />
         ) : !WebView ? (
           <Fallback3D />
         ) : (
@@ -614,13 +456,19 @@ export default function Gemelo3D() {
           </WebViewErrorBoundary>
         )}
 
-        {/* Mira central + controles: apunta el globo a un punto y crea ahí */}
-        {!cargando && WebView && (
+        {/* Mira central + controles: apunta el mapa a un punto y crea ahí */}
+        {!cargando && WebView && !!MAPBOX_TOKEN && (
           <>
             <View pointerEvents="none" style={styles.miraWrap}>
               <Crosshair size={36} color={Colors.superficie} strokeWidth={2.4} />
             </View>
             <View style={styles.controles3d}>
+              {onVolver2D && (
+                <Pressable onPress={onVolver2D} style={styles.btnControl}>
+                  <MapaIcono size={16} color={Colors.primario} strokeWidth={2.4} />
+                  <Text style={styles.btnControlTexto}>Ver en 2D</Text>
+                </Pressable>
+              )}
               <Pressable onPress={crearAqui} style={[styles.btnControl, styles.btnCrear]}>
                 <Plus size={16} color={Colors.superficie} strokeWidth={2.8} />
                 <Text style={[styles.btnControlTexto, { color: Colors.superficie }]}>Crear aquí</Text>
@@ -748,17 +596,6 @@ const styles = StyleSheet.create({
     borderColor: Colors.borde,
   },
   buscadorInput: { flex: 1, ...Type.cuerpo, fontSize: 14, color: Colors.texto, padding: 0 },
-  avisoToken: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.s,
-    paddingHorizontal: Spacing.l,
-    paddingVertical: Spacing.s,
-    backgroundColor: Colors.superficie,
-    borderBottomWidth: 1.5,
-    borderBottomColor: Colors.borde,
-  },
-  avisoTokenTexto: { ...Type.nota, fontSize: 11, color: Colors.textoSuave, flex: 1, lineHeight: 15 },
   fallback: {
     flex: 1,
     justifyContent: 'center',

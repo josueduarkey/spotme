@@ -12,6 +12,7 @@ import { Colors, Peana, Radius, Spacing } from '../../constants/theme';
 import { getActivityPoints } from '../../lib/queries/activity';
 import { getBusinesses } from '../../lib/queries/businesses';
 import { getPlaces } from '../../lib/queries/places';
+import Gemelo3D from './gemelo-3d';
 
 /** Región inicial: El Salvador completo. */
 const EL_SALVADOR = {
@@ -60,55 +61,24 @@ export default function Mapa() {
     });
   }
 
-  function alternar3D() {
-    const nuevo3D = !mapa3D;
-    setMapa3D(nuevo3D);
-    if (nuevo3D) {
-      // Inclinación 3D satelital (vista aérea Google Earth) en el Divino Salvador
-      mapRef.current?.animateCamera(
-        {
-          center: { latitude: 13.7013, longitude: -89.2247 },
-          pitch: 55, // Inclinación en 3D
-          heading: 30, // Rotación para efecto de profundidad
-          zoom: 16, // Zoom cercano
-        },
-        { duration: 1200 }
-      );
-    } else {
-      // Vista plana estándar de El Salvador completo
-      mapRef.current?.animateCamera(
-        {
-          center: { latitude: EL_SALVADOR.latitude, longitude: EL_SALVADOR.longitude },
-          pitch: 0,
-          heading: 0,
-          zoom: 8.5,
-        },
-        { duration: 1000 }
-      );
-    }
-  }
-
   const oficiales = lugares.filter((l) => !esComunidad(l));
   const comunidad = lugares.filter(esComunidad);
 
+  // Vista 3D: el gemelo Mapbox (edificios 3D + terreno) reemplaza toda la
+  // pantalla; su botón "Ver en 2D" regresa aquí. Un solo tab, dos modos.
+  if (mapa3D) {
+    return <Gemelo3D onVolver2D={() => setMapa3D(false)} />;
+  }
+
   return (
     <View style={styles.pantalla}>
-      <MapView
-        ref={mapRef}
-        style={StyleSheet.absoluteFill}
-        initialRegion={EL_SALVADOR}
-        mapType={mapa3D ? 'hybrid' : 'standard'}
-        showsBuildings={true}
-        pitchEnabled={true}
-        rotateEnabled={true}>
-        {!mapa3D && (
-          <UrlTile
-            urlTemplate="https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
-            shouldReplaceMapContent={true}
-            maximumZ={19}
-            tileSize={256}
-          />
-        )}
+      <MapView ref={mapRef} style={StyleSheet.absoluteFill} initialRegion={EL_SALVADOR}>
+        <UrlTile
+          urlTemplate="https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
+          shouldReplaceMapContent={true}
+          maximumZ={19}
+          tileSize={256}
+        />
         {capasActivas.has('oficiales') &&
           oficiales.map((l) => (
             <Marker
@@ -182,16 +152,15 @@ export default function Mapa() {
         </ScrollView>
       </SafeAreaView>
 
-      {/* Botón de alternancia de vista 3D Satélite (Google Earth) */}
+      {/* Switch a la vista 3D (gemelo Mapbox: edificios 3D + terreno) */}
       <Pressable
-        onPress={alternar3D}
+        onPress={() => setMapa3D(true)}
         style={({ pressed }) => [
           styles.boton3D,
-          mapa3D && { backgroundColor: Colors.acento, borderBottomColor: Colors.acento },
           pressed && { transform: [{ translateY: 2 }], borderBottomWidth: 2 },
         ]}>
         <Globe size={22} color={Colors.superficie} strokeWidth={2.4} />
-        <Text style={styles.boton3DTexto}>{mapa3D ? '2D' : '3D'}</Text>
+        <Text style={styles.boton3DTexto}>3D</Text>
       </Pressable>
 
       {/* FAB: crear lugar nuevo (pivote Fase 3) */}

@@ -12,12 +12,12 @@ import {
   Text,
   View,
 } from 'react-native';
-import MapView, { Region, UrlTile } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Boton } from '../components/Boton';
 import { Campo } from '../components/Campo';
 import { ChipCapa } from '../components/ChipCapa';
 import { ICONO_CATEGORIA } from '../components/iconos';
+import { MapaPickerMapbox, MapaPickerRef } from '../components/MapaPickerMapbox';
 import { Categoria, CATEGORIAS } from '../constants/mock';
 import { Colors, Peana, Radius, Spacing, Type } from '../constants/theme';
 import { createPlace } from '../lib/queries/places';
@@ -36,13 +36,8 @@ try {
   console.warn('expo-location no disponible en el cliente nativo actual.');
 }
 
-/** Región inicial: El Salvador completo. */
-const EL_SALVADOR: Region = {
-  latitude: 13.72,
-  longitude: -88.9,
-  latitudeDelta: 2.1,
-  longitudeDelta: 2.4,
-};
+/** Centro inicial: El Salvador completo. */
+const EL_SALVADOR = { latitude: 13.72, longitude: -88.9 };
 
 type Paso = 1 | 2 | 3;
 
@@ -52,10 +47,10 @@ type Paso = 1 | 2 | 3;
  */
 export default function CrearLugar() {
   const router = useRouter();
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<MapaPickerRef>(null);
 
   // Puente de datos: si llegamos con lat/lng (tap en el mapa 2D o en el
-  // gemelo 3D de Cesium), arrancamos con el pin ya sobre esa coordenada.
+  // gemelo 3D de Mapbox), arrancamos con el pin ya sobre esa coordenada.
   // Sin params, el flujo original: el usuario mueve el mapa sobre El Salvador.
   const params = useLocalSearchParams<{ lat?: string; lng?: string }>();
   const coordInicial = React.useMemo(() => {
@@ -63,10 +58,6 @@ export default function CrearLugar() {
     const lng = params.lng ? Number(params.lng) : NaN;
     return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
   }, [params.lat, params.lng]);
-
-  const regionInicial: Region = coordInicial
-    ? { latitude: coordInicial.lat, longitude: coordInicial.lng, latitudeDelta: 0.02, longitudeDelta: 0.02 }
-    : EL_SALVADOR;
 
   const [paso, setPaso] = useState<Paso>(1);
   const [coordenadas, setCoordenadas] = useState(
@@ -96,10 +87,7 @@ export default function CrearLugar() {
     }
     const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
     setBuscandoUbicacion(false);
-    mapRef.current?.animateToRegion(
-      { latitude: pos.coords.latitude, longitude: pos.coords.longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 },
-      600,
-    );
+    mapRef.current?.flyTo(pos.coords.latitude, pos.coords.longitude);
   }
 
   async function tomarFoto() {
@@ -156,20 +144,16 @@ export default function CrearLugar() {
 
   return (
     <View style={styles.pantalla}>
-      {/* Paso 1 — Ubicación: el mapa queda montado debajo de los pasos 2-3 */}
+      {/* Paso 1 — Ubicación: el mapa queda montado debajo de los pasos 2-3.
+          Mapbox (mismo look que el tab 3D Real); cae a Carto sin token. */}
       <View style={StyleSheet.absoluteFill}>
-        <MapView
+        <MapaPickerMapbox
           ref={mapRef}
-          style={StyleSheet.absoluteFill}
-          initialRegion={regionInicial}
-          onRegionChangeComplete={(r) => setCoordenadas({ lat: r.latitude, lng: r.longitude })}>
-          <UrlTile
-            urlTemplate="https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
-            shouldReplaceMapContent={true}
-            maximumZ={19}
-            tileSize={256}
-          />
-        </MapView>
+          initialLat={coordInicial?.lat ?? EL_SALVADOR.latitude}
+          initialLng={coordInicial?.lng ?? EL_SALVADOR.longitude}
+          initialZoom={coordInicial ? 15.5 : 7.4}
+          onCenterChange={(lat, lng) => setCoordenadas({ lat, lng })}
+        />
         {/* Pin fijo al centro: mover el mapa = mover el pin */}
         <View pointerEvents="none" style={styles.pinCentro}>
           <MapPin size={40} color={Colors.rojoAnil} strokeWidth={2.2} fill={Colors.superficie} />
