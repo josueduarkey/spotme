@@ -1,24 +1,13 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Globe, MapPin, Compass } from 'lucide-react-native';
 import React, { useCallback, useRef, useState } from 'react';
-import { Alert, ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { WebView } from 'react-native-webview';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getPlaces } from '../../lib/queries/places';
 import { Place } from '../../constants/mock';
 import { Colors, Radius, Spacing, Type, Fonts, Peana } from '../../constants/theme';
 import Constants from 'expo-constants';
-
-// Carga segura del módulo nativo WebView para evitar caídas en Expo Go
-let WebViewComponent: any = null;
-let isWebViewAvailable = false;
-
-try {
-  const { WebView } = require('react-native-webview');
-  WebViewComponent = WebView;
-  isWebViewAvailable = true;
-} catch (e) {
-  console.warn('react-native-webview no disponible en el cliente nativo actual.');
-}
 
 // Recuperar API Key activa
 const GOOGLE_MAPS_API_KEY =
@@ -26,7 +15,7 @@ const GOOGLE_MAPS_API_KEY =
 
 export default function Gemelo3D() {
   const router = useRouter();
-  const webViewRef = useRef<any>(null);
+  const webViewRef = useRef<WebView>(null);
   const [lugares, setLugares] = useState<Place[]>([]);
   const [cargando, setCargando] = useState(true);
 
@@ -242,8 +231,8 @@ export default function Gemelo3D() {
             <ActivityIndicator size="large" color={Colors.primario} />
             <Text style={styles.cargandoTexto}>Consultando Base de Datos...</Text>
           </View>
-        ) : isWebViewAvailable ? (
-          <WebViewComponent
+        ) : (
+          <WebView
             ref={webViewRef}
             originWhitelist={['*']}
             source={{ html: generateHTML() }}
@@ -252,14 +241,6 @@ export default function Gemelo3D() {
             domStorageEnabled={true}
             onMessage={handleWebViewMessage}
           />
-        ) : (
-          <View style={styles.cargando}>
-            <Globe size={48} color={Colors.acento} />
-            <Text style={[styles.cargandoTexto, { textAlign: 'center', paddingHorizontal: 32, lineHeight: 20 }]}>
-              El visor 3D requiere soporte nativo de WebView.{"\n\n"}
-              Por favor, instala el nuevo APK compilado con EAS Build en tu dispositivo para explorar el Gemelo Digital en 3D.
-            </Text>
-          </View>
         )}
       </View>
 
