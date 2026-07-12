@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Boton } from '../components/Boton';
 import { MotivoCapas } from '../components/MotivoCapas';
 import { Wordmark } from '../components/Wordmark';
+import { esAdmin } from '../constants/admins';
 import { Colors, Spacing, Type } from '../constants/theme';
 import { getSupabase, isSupabaseConfigured } from '../lib/supabase';
 
@@ -25,6 +26,11 @@ export default function Splash() {
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session?.user) {
+          // Los administradores van directo a su panel (entidad aparte).
+          if (esAdmin(session.user.email)) {
+            router.replace('/dashboard');
+            return;
+          }
           // Consultar el perfil de base de datos para saber adónde enrutar
           const { data: profile } = await supabase
             .from('profiles')

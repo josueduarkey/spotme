@@ -14,6 +14,7 @@ import Svg, { Path } from 'react-native-svg';
 import { Boton } from '../components/Boton';
 import { Campo } from '../components/Campo';
 import { Wordmark } from '../components/Wordmark';
+import { esAdmin } from '../constants/admins';
 import { Colors, Radius, Spacing, Type } from '../constants/theme';
 import { signIn, signUp, signInWithGoogle } from '../lib/queries/auth';
 
@@ -64,6 +65,11 @@ export default function Auth() {
       setError(res.error);
       return;
     }
+    // Los administradores son una entidad aparte: van directo a su panel.
+    if (esAdmin(res.profile?.email)) {
+      router.replace('/dashboard');
+      return;
+    }
     if (res.profile?.accountType) {
       router.replace(res.profile.accountType === 'turista' ? '/home' : '/business-dashboard');
     } else {
@@ -78,6 +84,10 @@ export default function Auth() {
     setCargandoGoogle(false);
     if (res.error) {
       setError(res.error);
+      return;
+    }
+    if (esAdmin(res.profile?.email)) {
+      router.replace('/dashboard');
       return;
     }
     if (res.profile?.accountType) {
