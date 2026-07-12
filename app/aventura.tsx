@@ -21,6 +21,8 @@ import { getDioramaSource } from '../constants/dioramas';
 import { getFotoLugar } from '../constants/fotosLugares';
 import { CATEGORIAS, Categoria, Place } from '../constants/mock';
 import { Colors, Fonts, Peana, Radius, Spacing, Type } from '../constants/theme';
+import { setAventuraActual } from '../lib/aventuraActual';
+import { precioDesde } from '../lib/experiencia';
 import { AventuraGenerada, DiaAventura, generarAventura } from '../lib/queries/routes';
 
 /** Opciones de tiempo — lenguaje de viajero, no de formulario. */
@@ -74,6 +76,13 @@ export default function Aventura() {
     const res = await generarAventura([...intereses], dias);
     setGenerando(false);
     setAventura(res);
+  }
+
+  /** El itinerario se convierte en paquete reservable (experiencia guiada). */
+  function reservarExperiencia() {
+    if (!aventura) return;
+    setAventuraActual(aventura);
+    router.push('/reservar');
   }
 
   function trazarDia(d: DiaAventura) {
@@ -232,6 +241,23 @@ export default function Aventura() {
                 )}
               </View>
             ))}
+
+            {/* El cierre: la aventura como experiencia guiada todo-arreglado */}
+            {itinerario.length > 0 && (
+              <Pressable onPress={reservarExperiencia} style={({ pressed }) => [styles.ctaReservar, pressed && { opacity: 0.92 }]}>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={styles.ctaReservarTitulo}>Reservar esta experiencia</Text>
+                  <Text style={styles.ctaReservarNota}>
+                    Guía local, transporte y entradas — tú solo llegas a disfrutar.
+                  </Text>
+                </View>
+                <View style={styles.ctaReservarPrecio}>
+                  <Text style={styles.ctaReservarDesde}>desde</Text>
+                  <Text style={styles.ctaReservarMonto}>${precioDesde(aventura!)}</Text>
+                  <Text style={styles.ctaReservarDesde}>por persona</Text>
+                </View>
+              </Pressable>
+            )}
 
             {/* Sugerencias de Google cerca de la zona — alimentan el twin */}
             {aventura!.sugerencias.length > 0 && (
@@ -418,6 +444,21 @@ const styles = StyleSheet.create({
   },
   botonTrazarTexto: { ...Type.cuerpoDestacado, fontSize: 13, color: Colors.superficie },
   pie: { ...Type.nota, fontSize: 12, color: Colors.textoSuave, fontStyle: 'italic', textAlign: 'center' },
+  ctaReservar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.m,
+    backgroundColor: Colors.acento,
+    borderRadius: Radius.l,
+    borderBottomWidth: Peana.grosor,
+    borderBottomColor: '#C05C14',
+    padding: Spacing.l,
+  },
+  ctaReservarTitulo: { ...Type.subtitulo, fontSize: 18, color: Colors.textoInvertido },
+  ctaReservarNota: { ...Type.nota, fontSize: 12, color: Colors.fondo },
+  ctaReservarPrecio: { alignItems: 'center' },
+  ctaReservarDesde: { ...Type.etiqueta, fontSize: 8, color: Colors.fondo, letterSpacing: 0.8 },
+  ctaReservarMonto: { fontSize: 26, fontFamily: Fonts.displayBold, color: Colors.superficie },
   cardSugerencias: {
     backgroundColor: Colors.superficie,
     borderRadius: Radius.m,
