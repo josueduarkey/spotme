@@ -6,17 +6,17 @@ Hackathon de Turismo Creativo Vol. 1 — PoC construido en 2 días con dos cuent
 
 **Fase 1 — Cuenta A: COMPLETA ✅**
 
-- Setup: Expo SDK 57 + expo-router, estructura según sección 4.1 (`app/`, `components/`, `constants/`, `lib/queries/`, `supabase/`), `.env.example` listo.
+- Setup: Expo SDK 56 + expo-router (bajado de 57 por compatibilidad con Expo Go; ver nota de dev build abajo), estructura según sección 4.1 (`app/`, `components/`, `constants/`, `lib/queries/`, `supabase/`), `.env.example` listo.
 - Sistema de diseño decidido — ver sección 6.1 (paleta torogoz, tipografía, elemento "peana").
 - Pantallas 1-3 construidas: Splash (motivo de 3 capas de mapa isométricas), Login/Registro (con tabs, validación, estados de carga/error), Selección de tipo de cuenta (cards Turista/Negocio con ruteo a stubs de Home y Dashboard).
 - Seam de auth para Cuenta B: `lib/queries/auth.ts` tiene `signIn`, `signUp`, `setAccountType` mockeados con las firmas ya definidas — Cuenta B solo reemplaza el cuerpo con Supabase real, las pantallas no cambian.
 
-**Fase 1 — Cuenta B: COMPLETA ✅** (proyecto cloud `bvmzrmvrdbfpkdhwazgv`, schema aplicado y verificado end-to-end: signup → trigger de perfil → login → setAccountType → lectura anónima de `places`. `.env` local ya tiene URL + publishable key. ⚠️ Falta desactivar "Confirm email" en el dashboard: Authentication → Sign In / Providers → Email.)
+**Fase 1 — Cuenta B: COMPLETA ✅** (proyecto cloud `bvmzrmvrdbfpkdhwazgv`, schema aplicado y verificado end-to-end: signup → trigger de perfil → login → setAccountType → lectura anónima de `places`. `.env` local ya tiene URL + publishable key. Confirm email: resuelto con el trigger de auto-confirmación en `schema.sql`.)
 
 - `supabase/schema.sql` versionado: 8 tablas de la sección 2 (con lat/lng agregados a `events` porque el mock de Cuenta A los usa), RLS en todas, trigger `handle_new_user` que crea la fila de `profiles` al registrarse, y seeds idempotentes (10 lugares reales, 4 eventos, 4 retos).
 - `lib/supabase.ts`: cliente con AsyncStorage + auto-refresh de sesión en foreground. Exporta `isSupabaseConfigured`.
 - `lib/queries/auth.ts`: `signIn`/`signUp`/`setAccountType` reales con las firmas originales intactas; si no existe `.env`, caen al comportamiento mock (las pantallas de Cuenta A funcionan igual con o sin credenciales).
-- Hecho 2026-07-11: proyecto creado en supabase.com, schema + seeds aplicados vía pooler, `.env` local con URL y publishable key (las keys nuevas `sb_publishable_...` funcionan como anon key en supabase-js). Pendiente solo: desactivar "Confirm email" en el dashboard antes de la demo.
+- Hecho 2026-07-11: proyecto creado en supabase.com, schema + seeds aplicados vía pooler, `.env` local con URL y publishable key (las keys nuevas `sb_publishable_...` funcionan como anon key en supabase-js).
 
 **Fase 2 — Cuenta A & B: COMPLETA ✅**
 
@@ -26,7 +26,15 @@ Hackathon de Turismo Creativo Vol. 1 — PoC construido en 2 días con dos cuent
 - **Geocoding listo:** `lib/queries/geocoding.ts` resuelto con Nominatim para el onboarding de negocios (Fase 4).
 - **Auto-confirmación de Email:** Se agregó el trigger en `supabase/schema.sql` y se documentó para auto-confirmar cuentas al registrarse en desarrollo/demo.
 
-**Listo para arrancar Fase 3 — Contenido Generado por Usuario (Cámara/Galería y subida de fotos).**
+**⚠️ Cambio de flujo de demo (2026-07-11): development build en vez de Expo Go para Android**
+
+- Expo Go en Android ya no incluye API key de Google Maps → el mapa renderizaba negro. Solución aplicada: development build con EAS (`expo-dev-client`, package `com.spotmi.app`, proyecto EAS `spotme` en cuenta `josueduard10`).
+- **APK instalado y verificado en dispositivo real — el mapa funciona.** Link del build: https://expo.dev/accounts/josueduard10/projects/spotme/builds (perfil `development`).
+- Flujo de trabajo idéntico: `npx expo start` + QR, pero se abre con la app **Spotmi** instalada (no Expo Go). Hot reload normal. En iPhone, Expo Go sigue funcionando (Apple Maps).
+- Solo se recompila el APK si cambia algo nativo (nueva librería con código nativo o config de `app.json`). Todo el código JS/TS de las Fases 3-6 se ve sin rebuild. Comando: `npx eas-cli build --profile development --platform android --non-interactive --no-wait` (keystore local en `credentials/`, gitignoreado — no borrar).
+- Para la demo: instalar este mismo APK en los 2-3 celulares del equipo + un celular corriendo Metro, o EAS Update si hay tiempo.
+
+**Fase 3 — SIGUIENTE (editar aquí las nuevas features antes de arrancar):** Contenido Generado por Usuario (cámara/galería y subida de fotos). Fase 3 B propuesta: `uploadPhoto()` en `lib/queries/uploads.ts` (Storage bucket `uploads` + fila en tabla `uploads` + asociación al lugar más cercano por distancia).
 
 
 ## 0. Resumen del producto
@@ -306,7 +314,7 @@ Vive en `constants/theme.ts`. No renegociar esto en fases futuras salvo que algo
 - [ ] Sistema de puntos/retos suma puntos visibles en perfil
 - [ ] El mapa tiene al menos 3 capas togglables (lugares, negocios, actividad de turistas)
 - [ ] El panel de inteligencia territorial muestra un insight real cruzando al menos 2 capas
-- [ ] App corre en Expo Go vía QR en un celular real para la demo
+- [x] App corre en celular real para la demo (Android: APK dev build de EAS + Metro; iPhone: Expo Go vía QR)
 - [ ] Los 8-10 lugares tienen su ícono diorama generado y consistente en el mapa
 
 ## 8. Prompts iniciales para arrancar Fase 1 (copiar y pegar en cada cuenta)
