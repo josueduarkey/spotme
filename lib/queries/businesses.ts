@@ -4,6 +4,7 @@
  */
 import { Business, MOCK_BUSINESSES } from '../../constants/mock';
 import { getSupabase, isSupabaseConfigured } from '../supabase';
+import { reverseGeocodeDepartment } from './geocoding';
 
 interface BusinessRow {
   id: string;
@@ -137,6 +138,10 @@ export async function createOrUpdateBusiness(
     } = await supabase.auth.getUser();
     if (!user) return { business: null, error: 'Inicia sesión para registrar tu negocio.' };
 
+    // Departamento automático desde las coordenadas — alimenta el panel de
+    // inteligencia territorial (cruce negocios × actividad por departamento).
+    const department = (await reverseGeocodeDepartment(input.lat, input.lng)) ?? null;
+
     const { data: existing } = await supabase
       .from('businesses')
       .select('id')
@@ -157,6 +162,7 @@ export async function createOrUpdateBusiness(
           contact: input.contact,
           lat: input.lat,
           lng: input.lng,
+          department,
         })
         .eq('id', existing.id)
         .select(BUSINESS_COLUMNS)
@@ -175,6 +181,7 @@ export async function createOrUpdateBusiness(
           contact: input.contact,
           lat: input.lat,
           lng: input.lng,
+          department,
         })
         .select(BUSINESS_COLUMNS)
         .single();

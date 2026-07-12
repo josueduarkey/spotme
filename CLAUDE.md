@@ -50,6 +50,20 @@ Hackathon de Turismo Creativo Vol. 1 — PoC construido en 2 días con dos cuent
 - `getPlaces()` ya incluye lugares de comunidad con los campos nuevos (`source`, `createdBy`, `verificationCount`, `isVerified`) mapeados al tipo `Place` extendido.
 - Schema migrado en DB real (idempotente): columnas nuevas en `places` (seeds marcados `official`+verificados), tabla `place_verifications`, reto tipo `create_place` (+2 retos seed: Fundador, Cartógrafo comunitario), políticas RLS anti-trampa.
 
+**Fase 4 — Cuenta A & B: COMPLETA ✅** (rutas OSRM en `lib/queries/routes.ts` + `app/ruta.tsx`/`planificar-ruta.tsx`; flujo negocio con `getOwnBusiness`/`createOrUpdateBusiness`/`getBusinessMetrics` + dashboard. Extra fuera de plan: tab "3D Real" con Cesium + Google Photorealistic 3D Tiles en WebView, login con Google.)
+
+**Fase 5 — Cuenta B: COMPLETA ✅ (2026-07-12)** Gamificación consolidada + inteligencia territorial + catálogo ampliado:
+
+- **Catálogo oficial ampliado a 37 lugares cubriendo los 14 departamentos** (antes 10). Seeds idempotentes en `schema.sql`.
+- **Buscador**: `searchPlaces()` en `lib/queries/search.ts` — Google **Places API (New)** (verificada activa en la key existente), sesgada a El Salvador, con categoría sugerida para prellenar "Crear lugar"; fallback automático a Nominatim. Cuenta A: montar barra de búsqueda en mapa/crear-lugar.
+- **Puntos — UN solo sistema, reglas oficiales**: +25 por foto (`handle_new_upload`), +50 por lugar de comunidad (`handle_new_place`), y los premios de retos los paga ÚNICAMENTE `on_challenge_points` al completarse la fila de `user_challenges`. ⚠️ Hubo doble pago por triggers duplicados de ambas cuentas — ya consolidado y los saldos reconciliados con la regla `RECONCILIACIÓN DE PUNTOS` al final de `schema.sql` (idempotente, recalcula desde los hechos). **No agregar sumas de puntos en ningún otro lado.**
+- **Retos**: "Primera postal", "Fundador" y "Cartógrafo comunitario" se completan solos por triggers de DB; `syncChallenges()` en `profile.ts` evalúa y completa los que la DB no puede ver sola ("Cazador de dioramas", "Ruta de las Flores completa") y devuelve los recién completados para la celebración en UI.
+- **Panel territorial (pantalla 17)**: `getTerritorialInsight()` en `lib/queries/insights.ts` — cruza uploads × lugares comunidad × negocios por departamento y genera la frase del insight con datos reales (+ tabla `stats` para graficar). `businesses` ganó columna `department` (auto por reverse geocoding al registrar).
+- **Capas en el gemelo 3D (rúbrica)**: el tab "3D Real" ahora tiene los chips Lugares/Negocios/Actividad y renderiza las 3 capas en Cesium (pines de negocios azules clickeables → ficha, círculos de actividad por peso). Toggle por postMessage sin recargar el globo.
+- Guarda anti-fantasmas: `createPlace` rechaza coordenadas fuera de El Salvador (un emulador en EE.UU. había creado un lugar en San Francisco — borrado).
+
+**Fase 6 — pendiente (pulido y demo):** contenido curado, prueba E2E del recorrido completo en dispositivo, guion de demo. Nota: las capas 3D nuevas son JS puro — llegan por Metro sin rebuild del APK.
+
 **🔄 PIVOTE (2026-07-11): la Fase 3 ahora incluye crear lugares desde cero, no solo subir fotos a lugares existentes.** Ver sección 0 para la justificación completa (esto refuerza el digital twin, no lo diluye) y sección 9 para los prompts actualizados de Cuenta A y Cuenta B. Cambios de modelo de datos: `places` ganó `source`, `created_by`, `verification_count`, `is_verified`; nueva tabla `place_verifications`. Cambios de pantallas: nueva pantalla 7b "Crear lugar nuevo"; pantalla 7 (ficha) gana botón "Confirmar que existe" para lugares sin verificar. Usar los prompts de la sección 9, no los de la sección 8 (esos ya están completados).
 
 ## 0. Resumen del producto

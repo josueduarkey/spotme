@@ -75,8 +75,22 @@ create table if not exists public.businesses (
   address text,
   schedule text,
   contact text,
+  department text,
   created_at timestamptz not null default now()
 );
+
+-- Migración Fase 5: departamento del negocio (para el panel de inteligencia
+-- territorial, que cruza capas agrupando por departamento).
+alter table public.businesses add column if not exists department text;
+update public.businesses b set department = v.dep
+  from (values
+    ('Café Albania', 'Sonsonate'),
+    ('Pupusería La Esquina de Suchi', 'Cuscatlán'),
+    ('Hostal Punta Roca', 'La Libertad'),
+    ('Artesanías Añil Real', 'Cuscatlán'),
+    ('Kayak Coatepeque Tours', 'Santa Ana')
+  ) as v(name, dep)
+  where b.name = v.name and b.department is null;
 
 -- fotos subidas por usuarios (UGC), asociadas a un lugar o negocio
 create table if not exists public.uploads (
@@ -200,6 +214,10 @@ begin
         is_verified = (v_count >= 3)
     where id = new.place_id;
 
+  -- Nota: el premio al creador cuando el lugar se verifica lo maneja el reto
+  -- "Cartógrafo comunitario" (trigger on_place_verification_gamify + pagador
+  -- único on_challenge_points) — aquí NO se suman puntos.
+
   return new;
 end;
 $$;
@@ -208,6 +226,44 @@ drop trigger if exists on_place_verification on public.place_verifications;
 create trigger on_place_verification
   after insert on public.place_verifications
   for each row execute function public.handle_place_verification();
+
+-- =============== GAMIFICACIÓN: pagador único de premios de retos ===============
+-- Reglas de puntos (un solo sistema, sin dobles pagos):
+--   * Puntos base: +25 por foto y +50 por lugar de comunidad — los pagan
+--     handle_new_upload / handle_new_place (sección de triggers al final).
+--   * Premios de retos (points_reward): los paga SOLO este trigger cuando una
+--     fila de user_challenges pasa a 'completed' (venga de otro trigger o del
+--     cliente vía syncChallenges). Jamás sumar premios en otro lado.
+
+-- Limpieza de triggers de una versión anterior que pagaba doble:
+drop trigger if exists on_upload_points on public.uploads;
+drop function if exists public.award_points_on_upload();
+drop trigger if exists on_place_points on public.places;
+drop function if exists public.award_points_on_place();
+
+create or replace function public.award_points_on_challenge()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_reward int;
+begin
+  if new.status = 'completed'
+     and (tg_op = 'INSERT' or old.status is distinct from 'completed') then
+    select points_reward into v_reward from public.challenges where id = new.challenge_id;
+    update public.profiles set points = points + coalesce(v_reward, 0) where id = new.user_id;
+    new.completed_at := coalesce(new.completed_at, now());
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_challenge_points on public.user_challenges;
+create trigger on_challenge_points
+  before insert or update on public.user_challenges
+  for each row execute function public.award_points_on_challenge();
 
 -- =============== RLS ===============
 
@@ -360,6 +416,97 @@ insert into public.places (name, department, description, lat, lng, category) va
    13.1750, -88.1050, 'aventura')
 on conflict (name) do nothing;
 
+-- =============== SEED: catálogo ampliado (Fase 5 — cobertura de los 14 departamentos) ===============
+
+insert into public.places (name, department, description, lat, lng, category) values
+  ('Puerta del Diablo', 'San Salvador',
+   'Formación rocosa con vistas de vértigo al valle y al Pacífico. Rappel, senderos y la leyenda más famosa de Panchimalco.',
+   13.6047, -89.1923, 'aventura'),
+  ('El Boquerón', 'San Salvador',
+   'El cráter del volcán de San Salvador: 1.5 km de diámetro, jardines de hortensias y miradores sobre la capital.',
+   13.7358, -89.2884, 'naturaleza'),
+  ('Centro Histórico de San Salvador', 'San Salvador',
+   'Palacio Nacional, Teatro Nacional, Catedral e Iglesia El Rosario — el corazón arquitectónico del país, renovado.',
+   13.6989, -89.1914, 'cultura'),
+  ('Ruinas de Tazumal', 'Santa Ana',
+   'La pirámide maya más importante de El Salvador, en Chalchuapa. 1,200 años de historia y museo de sitio.',
+   13.9789, -89.6742, 'cultura'),
+  ('Teatro de Santa Ana', 'Santa Ana',
+   'Joya arquitectónica de 1910, el teatro más bello del país. Frescos, palcos dorados y agenda cultural viva.',
+   13.9946, -89.5598, 'cultura'),
+  ('Cerro Verde', 'Santa Ana',
+   'Bosque nebuloso sobre un volcán extinto, con miradores hacia el Izalco y el Ilamatepec. Senderos entre orquídeas.',
+   13.8261, -89.6236, 'naturaleza'),
+  ('Volcán de Izalco', 'Sonsonate',
+   'El "Faro del Pacífico": el volcán más joven y fotogénico del país. Ascenso exigente con recompensa total.',
+   13.8133, -89.6331, 'aventura'),
+  ('Nahuizalco', 'Sonsonate',
+   'Pueblo náhuat-pipil de la Ruta de las Flores, famoso por su mercado nocturno de velas y artesanías de mimbre.',
+   13.7775, -89.7364, 'cultura'),
+  ('Concepción de Ataco', 'Ahuachapán',
+   'Callecitas empedradas y murales de colores en lo alto de la Ruta de las Flores. Café de altura y clima de montaña.',
+   13.8703, -89.8481, 'cultura'),
+  ('Apaneca', 'Ahuachapán',
+   'Entre cafetales y laberintos verdes: canopy, buggies y la mejor taza de café de la cordillera Apaneca-Ilamatepec.',
+   13.8592, -89.8033, 'gastronomia'),
+  ('Playa El Zonte', 'La Libertad',
+   'Surf City y cuna de Bitcoin Beach: olas de clase mundial, atardeceres naranjas y ambiente de pueblo surfero.',
+   13.4922, -89.4433, 'aventura'),
+  ('Parque Arqueológico San Andrés', 'La Libertad',
+   'Centro ceremonial maya en el valle de Zapotitán, con acrópolis, museo y campos que cuentan 2,000 años.',
+   13.7994, -89.3906, 'cultura'),
+  ('Malecón del Puerto de La Libertad', 'La Libertad',
+   'El mercado de mariscos más famoso del país sobre el muelle histórico. Ostras frescas viendo romper las olas.',
+   13.4869, -89.3222, 'gastronomia'),
+  ('La Palma', 'Chalatenango',
+   'El pueblo-galería de Fernando Llort: fachadas pintadas a mano y talleres de artesanía en madera y semillas.',
+   14.3178, -89.1697, 'cultura'),
+  ('Cerro El Pital', 'Chalatenango',
+   'El punto más alto de El Salvador (2,730 m): bosques de pino, neblina, fresas con crema y clima de abrigo.',
+   14.3908, -89.1225, 'naturaleza'),
+  ('Cascada Los Tercios', 'Cuscatlán',
+   'Cortina de columnas hexagonales de basalto cerca de Suchitoto — una rareza geológica que parece esculpida a mano.',
+   13.9297, -89.0192, 'naturaleza'),
+  ('Ilobasco', 'Cabañas',
+   'Capital del barro: talleres de miniaturas y "sorpresas" de cerámica que caben en una cáscara de huevo.',
+   13.8417, -88.8483, 'cultura'),
+  ('Bosque de Cinquera', 'Cabañas',
+   'Bosque renacido tras la guerra, con senderos, pozas y memoria histórica. Turismo comunitario auténtico.',
+   13.8636, -88.9569, 'naturaleza'),
+  ('Volcán Chichontepec', 'San Vicente',
+   'El coloso de dos picos del valle del Jiboa. Ascenso entre cafetales e infiernillos humeantes en su falda.',
+   13.5953, -88.8369, 'aventura'),
+  ('Laguna de Apastepeque', 'San Vicente',
+   'Laguna cratérica de aguas turquesa, ideal para nadar, kayak y picnic sin multitudes.',
+   13.6664, -88.7639, 'naturaleza'),
+  ('Costa del Sol', 'La Paz',
+   'La franja de playa más larga del país: estero de Jaltepeque, cocoteros y paseos en lancha entre manglares.',
+   13.3364, -88.8942, 'naturaleza'),
+  ('Laguna de Alegría', 'Usulután',
+   'La "Esmeralda de América": laguna sulfurosa dentro del cráter del volcán Tecapa, junto al pueblo florido de Alegría.',
+   13.4931, -88.4864, 'naturaleza'),
+  ('Volcán Chaparrastique', 'San Miguel',
+   'El cono perfecto del oriente. Ascenso serio para madrugadores, con vista al Pacífico y al valle migueleño.',
+   13.4342, -88.2692, 'aventura'),
+  ('Perquín', 'Morazán',
+   'Capital de la memoria histórica: Museo de la Revolución, aire de pino y la ruta de paz de Morazán.',
+   13.9578, -88.1614, 'cultura'),
+  ('Río Sapo', 'Morazán',
+   'Pozas cristalinas de agua esmeralda entre bosque protegido — uno de los ríos más limpios de Centroamérica.',
+   13.9740, -88.1030, 'naturaleza'),
+  ('Playa El Tamarindo', 'La Unión',
+   'Bahía de aguas tranquilas en el extremo oriental, con vista a los volcanes del Golfo de Fonseca.',
+   13.1592, -87.9014, 'naturaleza'),
+  ('Isla Meanguera del Golfo', 'La Unión',
+   'Isla habitada en pleno Golfo de Fonseca: lanchas, pescado fresco y tres países a la vista desde el mirador.',
+   13.1900, -87.7150, 'aventura')
+on conflict (name) do nothing;
+
+-- Todos los seeds (sin created_by) son capa oficial verificada — corre después
+-- de los inserts para cubrir también una base recién creada en una sola pasada.
+update public.places set source = 'official', is_verified = true
+  where created_by is null and source = 'community';
+
 -- =============== SEED: eventos ===============
 
 insert into public.events (title, description, department, date, lat, lng) values
@@ -456,14 +603,12 @@ begin
     where user_id = new.user_id;
 
     if total_uploads = 1 then
+      -- El premio del reto lo paga on_challenge_points (único pagador de
+      -- points_reward) al insertarse esta fila — no sumar aquí para no duplicar.
       insert into public.user_challenges (user_id, challenge_id, status, completed_at)
       values (new.user_id, first_upload_challenge_id, 'completed', now())
       on conflict (user_id, challenge_id) do update
       set status = 'completed', completed_at = now();
-
-      update public.profiles
-      set points = points + 50
-      where id = new.user_id;
     end if;
   end if;
 
@@ -502,14 +647,11 @@ begin
       where created_by = new.created_by;
 
       if total_created = 1 then
+        -- Premio del reto: lo paga on_challenge_points, no sumar aquí.
         insert into public.user_challenges (user_id, challenge_id, status, completed_at)
         values (new.created_by, founder_challenge_id, 'completed', now())
         on conflict (user_id, challenge_id) do update
         set status = 'completed', completed_at = now();
-
-        update public.profiles
-        set points = points + 100
-        where id = new.created_by;
       end if;
     end if;
   end if;
@@ -538,14 +680,11 @@ begin
     limit 1;
 
     if cartographer_challenge_id is not null then
+      -- Premio del reto (+300): lo paga on_challenge_points, no sumar aquí.
       insert into public.user_challenges (user_id, challenge_id, status, completed_at)
       values (new.created_by, cartographer_challenge_id, 'completed', now())
       on conflict (user_id, challenge_id) do update
       set status = 'completed', completed_at = now();
-
-      update public.profiles
-      set points = points + 300
-      where id = new.created_by;
     end if;
   end if;
 
@@ -557,3 +696,18 @@ drop trigger if exists on_place_verification_gamify on public.places;
 create trigger on_place_verification_gamify
   after update on public.places
   for each row execute function public.handle_place_verification_gamify();
+
+-- =============== RECONCILIACIÓN DE PUNTOS ===============
+-- Recalcula profiles.points desde los hechos (fotos, lugares, retos) con las
+-- reglas oficiales: 25/foto + 50/lugar comunidad + points_reward por reto
+-- completado. Idempotente: corrige cualquier saldo inflado por versiones
+-- anteriores de los triggers y deja el sistema auto-consistente.
+update public.profiles pr
+set points =
+  coalesce((select count(*) * 25 from public.uploads u where u.user_id = pr.id), 0)
+  + coalesce((select count(*) * 50 from public.places p
+              where p.created_by = pr.id and p.source = 'community'), 0)
+  + coalesce((select sum(c.points_reward)
+              from public.user_challenges uc
+              join public.challenges c on c.id = uc.challenge_id
+              where uc.user_id = pr.id and uc.status = 'completed'), 0);

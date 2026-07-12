@@ -1,6 +1,6 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Globe, MapPin, Compass } from 'lucide-react-native';
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -16,9 +16,16 @@ try {
   WebView = null;
 }
 import { getPlaces } from '../../lib/queries/places';
-import { Place } from '../../constants/mock';
+import { getBusinesses } from '../../lib/queries/businesses';
+import { getActivityPoints } from '../../lib/queries/activity';
+import { ActivityPoint, Business, Place } from '../../constants/mock';
 import { Colors, Radius, Spacing, Type, Fonts, Peana } from '../../constants/theme';
+import { ChipCapa } from '../../components/ChipCapa';
+import { IconoActividad, IconoNegocio } from '../../components/iconos';
+import { Mountain } from 'lucide-react-native';
 import Constants from 'expo-constants';
+
+type Capa3D = 'lugares' | 'negocios' | 'actividad';
 
 // Recuperar API Key activa
 const GOOGLE_MAPS_API_KEY =
@@ -62,16 +69,34 @@ export default function Gemelo3D() {
   const router = useRouter();
   const webViewRef = useRef<any>(null);
   const [lugares, setLugares] = useState<Place[]>([]);
+  const [negocios, setNegocios] = useState<Business[]>([]);
+  const [actividad, setActividad] = useState<ActivityPoint[]>([]);
+  // Las 3 capas del twin arrancan visibles: la lectura cruzada es el punto.
+  const [capasActivas, setCapasActivas] = useState<Set<Capa3D>>(new Set(['lugares', 'negocios', 'actividad']));
   const [cargando, setCargando] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
-      getPlaces().then((res) => {
-        setLugares(res);
+      Promise.all([getPlaces(), getBusinesses(), getActivityPoints()]).then(([ls, ns, acts]) => {
+        setLugares(ls);
+        setNegocios(ns);
+        setActividad(acts);
         setCargando(false);
       });
     }, []),
   );
+
+  /** Toggle por postMessage: no regenera el HTML, así el globo no se recarga. */
+  function alternarCapa(capa: Capa3D) {
+    setCapasActivas((prev) => {
+      const s = new Set(prev);
+      const visible = !s.has(capa);
+      if (visible) s.add(capa);
+      else s.delete(capa);
+      webViewRef.current?.postMessage(JSON.stringify({ type: 'toggle_layer', layer: capa, visible }));
+      return s;
+    });
+  }
 
   function centrarLugar(l: Place) {
     // Comunicar con el WebView para volar al lugar en 3D
@@ -94,6 +119,12 @@ export default function Gemelo3D() {
           params: { id: data.id, tipo: 'lugar' },
         });
       }
+      if (data.type === 'business_click' && data.id) {
+        router.push({
+          pathname: '/ficha/[id]',
+          params: { id: data.id, tipo: 'negocio' },
+        });
+      }
     } catch (e) {
       console.warn('WebView Message Error:', e);
     }
@@ -110,6 +141,12 @@ export default function Gemelo3D() {
         source: l.source,
         isVerified: l.isVerified,
       })),
+    );
+    const businessesJson = JSON.stringify(
+      negocios.map((n) => ({ id: n.id, name: n.name, lat: n.lat, lng: n.lng })),
+    );
+    const activityJson = JSON.stringify(
+      actividad.map((a) => ({ lat: a.lat, lng: a.lng, weight: a.weight })),
     );
 
     return `
@@ -188,10 +225,59 @@ export default function Gemelo3D() {
               }
             });
 
+            // ===== Capas del twin: mismas 3 capas cruzadas que el mapa 2D =====
+            // Cada entidad se registra en su capa para poder togglearla sin
+            // recargar el globo (mensaje 'toggle_layer' desde React Native).
+            const layers = { lugares: [], negocios: [], actividad: [] };
+
+            // Capa de negocios (pines azules)
+            const negocios = ${businessesJson};
+            const pinNegocios = new Cesium.PinBuilder();
+            for (const n of negocios) {
+              const e = viewer.entities.add({
+                id: 'biz-' + n.id,
+                position: Cesium.Cartesian3.fromDegrees(n.lng, n.lat, 640),
+                billboard: {
+                  image: pinNegocios.fromColor(Cesium.Color.fromCssColorString('#1A54A6'), 26).toDataURL(),
+                  verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+                  heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND
+                },
+                label: {
+                  text: n.name,
+                  font: 'bold 10px sans-serif',
+                  fillColor: Cesium.Color.WHITE,
+                  outlineColor: Cesium.Color.fromCssColorString('#1A54A6'),
+                  outlineWidth: 3,
+                  style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+                  verticalOrigin: Cesium.VerticalOrigin.TOP,
+                  pixelOffset: new Cesium.Cartesian2(0, 4),
+                  heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND
+                }
+              });
+              layers.negocios.push(e);
+            }
+
+            // Capa de actividad de turistas (círculos naranjas, radio por peso)
+            const actividad = ${activityJson};
+            for (const a of actividad) {
+              const e = viewer.entities.add({
+                position: Cesium.Cartesian3.fromDegrees(a.lng, a.lat),
+                ellipse: {
+                  semiMajorAxis: 400 + a.weight * 160,
+                  semiMinorAxis: 400 + a.weight * 160,
+                  material: Cesium.Color.fromCssColorString('#E67E22').withAlpha(0.30),
+                  outline: true,
+                  outlineColor: Cesium.Color.fromCssColorString('#E67E22').withAlpha(0.6),
+                  heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
+                }
+              });
+              layers.actividad.push(e);
+            }
+
             // Cargar pines interactivos de los lugares del Twin
             const pinBuilder = new Cesium.PinBuilder();
             const markers = ${placesJson};
-            
+
             for (const m of markers) {
               let color = Cesium.Color.fromCssColorString('#0E9AA3'); // Turquesa: Oficial o Comunidad Verificado
               if (m.source === 'community' && !m.isVerified) {
@@ -199,8 +285,8 @@ export default function Gemelo3D() {
               }
               
               const pin = pinBuilder.fromColor(color, 32).toDataURL();
-              
-              viewer.entities.add({
+
+              const e = viewer.entities.add({
                 id: m.id,
                 // Elevar un poco los marcadores sobre el relieve 3D
                 position: Cesium.Cartesian3.fromDegrees(m.lng, m.lat, m.source === 'official' ? 680 : 660),
@@ -221,6 +307,7 @@ export default function Gemelo3D() {
                   heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND
                 }
               });
+              layers.lugares.push(e);
             }
 
             // Handler para clicks en marcadores 3D
@@ -229,7 +316,11 @@ export default function Gemelo3D() {
               const pickedObject = viewer.scene.pick(click.position);
               if (Cesium.defined(pickedObject) && Cesium.defined(pickedObject.id)) {
                 const entityId = pickedObject.id.id;
-                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'marker_click', id: entityId }));
+                if (typeof entityId === 'string' && entityId.startsWith('biz-')) {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'business_click', id: entityId.slice(4) }));
+                } else if (entityId) {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'marker_click', id: entityId }));
+                }
               }
             }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
@@ -237,6 +328,9 @@ export default function Gemelo3D() {
             window.addEventListener('message', (event) => {
               try {
                 const data = JSON.parse(event.data);
+                if (data.type === 'toggle_layer' && layers[data.layer]) {
+                  for (const e of layers[data.layer]) e.show = !!data.visible;
+                }
                 if (data.type === 'fly_to') {
                   // Volar al destino en 3D
                   viewer.camera.flyTo({
@@ -260,6 +354,11 @@ export default function Gemelo3D() {
     `;
   };
 
+  // Memoizado: togglear capas o re-renders no regeneran el HTML (el globo no
+  // se recarga); solo cambia si cambian los datos de las capas.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const htmlSource = useMemo(() => ({ html: generateHTML() }), [lugares, negocios, actividad]);
+
   return (
     <SafeAreaView style={styles.pantalla} edges={['top']}>
       {/* Encabezado */}
@@ -269,6 +368,28 @@ export default function Gemelo3D() {
           <Text style={styles.etiqueta}>Digital Twin Real</Text>
           <Text style={styles.titulo}>El Salvador en 3D Fotorrealista</Text>
         </View>
+      </View>
+
+      {/* Selector de capas del twin — el cruce de ≥2 capas también vive en 3D (rúbrica) */}
+      <View style={styles.capas3d}>
+        <ChipCapa
+          etiqueta="Lugares"
+          Icono={Mountain}
+          activa={capasActivas.has('lugares')}
+          onPress={() => alternarCapa('lugares')}
+        />
+        <ChipCapa
+          etiqueta="Negocios"
+          Icono={IconoNegocio}
+          activa={capasActivas.has('negocios')}
+          onPress={() => alternarCapa('negocios')}
+        />
+        <ChipCapa
+          etiqueta="Actividad"
+          Icono={IconoActividad}
+          activa={capasActivas.has('actividad')}
+          onPress={() => alternarCapa('actividad')}
+        />
       </View>
 
       {/* Visor 3D */}
@@ -285,7 +406,7 @@ export default function Gemelo3D() {
             <WebView
               ref={webViewRef}
               originWhitelist={['*']}
-              source={{ html: generateHTML() }}
+              source={htmlSource}
               style={styles.webView}
               javaScriptEnabled={true}
               domStorageEnabled={true}
@@ -337,6 +458,15 @@ const styles = StyleSheet.create({
   titulo: { ...Type.cuerpoDestacado, fontSize: 16, color: Colors.texto, fontFamily: Fonts.cuerpoBold },
   visorContainer: { flex: 1, backgroundColor: '#000' },
   webView: { flex: 1 },
+  capas3d: {
+    flexDirection: 'row',
+    gap: Spacing.s,
+    paddingHorizontal: Spacing.l,
+    paddingVertical: Spacing.s,
+    backgroundColor: Colors.superficie,
+    borderBottomWidth: 1.5,
+    borderBottomColor: Colors.borde,
+  },
   fallback: {
     flex: 1,
     justifyContent: 'center',

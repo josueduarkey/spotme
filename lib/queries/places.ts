@@ -108,6 +108,12 @@ export async function createPlace(input: NewPlaceInput): Promise<{ place: Place 
     return { place, error: null };
   }
 
+  // Solo territorio salvadoreño: evita lugares fantasma creados desde
+  // emuladores (ubicación por defecto en EE.UU.) o GPS sin señal.
+  if (input.lat < 13.0 || input.lat > 14.5 || input.lng < -90.2 || input.lng > -87.6) {
+    return { place: null, error: 'La ubicación está fuera de El Salvador. Mueve el pin dentro del país.' };
+  }
+
   const supabase = getSupabase();
   const {
     data: { user },
