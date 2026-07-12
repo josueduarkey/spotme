@@ -6,6 +6,14 @@
  */
 import { AccountType, MOCK_PROFILE, MockProfile } from '../../constants/mock';
 import { getSupabase, isSupabaseConfigured } from '../supabase';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
+
+try {
+  WebBrowser.maybeCompleteAuthSession();
+} catch (e) {
+  console.warn(e);
+}
 
 export interface AuthResult {
   profile: MockProfile | null;
@@ -140,5 +148,108 @@ export async function signOut(): Promise<{ error: string | null }> {
 
   const { error } = await getSupabase().auth.signOut();
   return { error: error ? error.message : null };
+}
+
+/**
+ * Inicia sesión utilizando Google OAuth a través de Supabase.
+ * Abre una pestaña de navegador integrada y redirige de vuelta a la app.
+ */
+export async function signInWithGoogle(): Promise<AuthResult> {
+  if (!isSupabaseConfigured) {
+    await delay(600);
+    return { profile: MOCK_PROFILE, error: null };
+  }
+
+  try {
+    const supabase = getSupabase();
+    // Generar la URL profunda de retorno configurada en app.json (scheme: spotme)
+    const redirectUrl = Linking.createURL('/auth-callback');
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: redirectUrl,
+        skipBrowserRedirect: true,
+      },
+    });
+
+    if (error) return { profile: null, error: toSpanish(error.message) };
+    if (!data?.url) return { profile: null, error: 'No se pudo generar el enlace de Google.' };
+
+    // Abrir la sesión de autenticación en el navegador del dispositivo
+    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+
+    if (result.type === 'success' && result.url) {
+      // Parsear tokens de la URL hash fragment o query params
+      const cleanedUrl = result.url.replace('#', '?');
+      const parts = cleanedUrl.split('?');
+      const params: Record<string, string> = {};
+      if (parts.length > 1) {
+        const query = parts[1];
+        const pairs = query.split('&');
+        for (const pair of pairs) {
+          const [key, value] = pair.split('=');
+          if (key && value) {
+            params[decodeURIComponent(key)] = decodeURIComponent(value);
+          }
+        }
+      }
+
+      const access_token = params.access_token;
+      const refresh_token = params.refresh_token;
+
+      if (access_token && refresh_token) {
+        const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+          access_token,
+          refresh_token,
+        });
+
+        if (sessionError) return { profile: null, error: toSpanish(sessionError.message) };
+
+        const userId = sessionData.user?.id || '';
+        const email = sessionData.user?.email || '';
+
+        // Obtener el perfil asociado en profiles
+        const { data: row } = await supabase
+          .from('profiles')
+          .select('id, full_name, account_type, points')
+          .eq('id', userId)
+          .maybeSingle();
+
+        let profileRow = row;
+        if (!profileRow && userId) {
+          // Crear un perfil básico si el trigger en la base de datos no lo creó todavía
+          const { data: inserted } = await supabase
+            .from('profiles')
+            .insert({
+              id: userId,
+              full_name: sessionData.user?.user_metadata?.full_name || 'Usuario Google',
+              account_type: 'turista',
+              points: 0,
+            })
+            .select()
+            .single();
+          profileRow = inserted;
+        }
+
+        return {
+          profile: toProfile(
+            profileRow,
+            userId,
+            email,
+            sessionData.user?.user_metadata?.full_name || 'Usuario Google'
+          ),
+          error: null,
+        };
+      }
+    }
+
+    return { profile: null, error: 'Inicio de sesión cancelado.' };
+  } catch (e) {
+    return {
+      profile: null,
+      error: e instanceof Error ? e.message : 'Error inesperado al conectar con Google.',
+    };
+  }
 }
 

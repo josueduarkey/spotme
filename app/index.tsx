@@ -1,16 +1,59 @@
 import { useRouter } from 'expo-router';
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Boton } from '../components/Boton';
 import { MotivoCapas } from '../components/MotivoCapas';
 import { Wordmark } from '../components/Wordmark';
 import { Colors, Spacing, Type } from '../constants/theme';
+import { getSupabase, isSupabaseConfigured } from '../lib/supabase';
 
 /** Pantalla 1 — Splash / bienvenida. */
 export default function Splash() {
   const router = useRouter();
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    async function verificarSesion() {
+      if (!isSupabaseConfigured) {
+        setCargando(false);
+        return;
+      }
+      try {
+        const supabase = getSupabase();
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user) {
+          // Consultar el perfil de base de datos para saber adónde enrutar
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('account_type')
+            .eq('id', session.user.id)
+            .maybeSingle();
+
+          if (profile?.account_type) {
+            router.replace(profile.account_type === 'turista' ? '/home' : '/business-dashboard');
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('Error en auto-login:', e);
+      }
+      setCargando(false);
+    }
+
+    verificarSesion();
+  }, []);
+
+  if (cargando) {
+    return (
+      <SafeAreaView style={[styles.pantalla, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={Colors.amarilloSol} />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.pantalla}>
       <View style={styles.centro}>

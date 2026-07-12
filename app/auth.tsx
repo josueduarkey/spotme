@@ -14,7 +14,7 @@ import { Boton } from '../components/Boton';
 import { Campo } from '../components/Campo';
 import { Wordmark } from '../components/Wordmark';
 import { Colors, Radius, Spacing, Type } from '../constants/theme';
-import { signIn, signUp } from '../lib/queries/auth';
+import { signIn, signUp, signInWithGoogle } from '../lib/queries/auth';
 
 type Modo = 'login' | 'registro';
 
@@ -26,6 +26,7 @@ export default function Auth() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [cargando, setCargando] = useState(false);
+  const [cargandoGoogle, setCargandoGoogle] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const esLogin = modo === 'login';
@@ -39,7 +40,22 @@ export default function Auth() {
       setError(res.error);
       return;
     }
-    // Si ya tiene tipo de cuenta configurado (turista o negocio), redirigimos directamente.
+    if (res.profile?.accountType) {
+      router.replace(res.profile.accountType === 'turista' ? '/home' : '/business-dashboard');
+    } else {
+      router.push('/account-type');
+    }
+  }
+
+  async function conectarGoogle() {
+    setCargandoGoogle(true);
+    setError(null);
+    const res = await signInWithGoogle();
+    setCargandoGoogle(false);
+    if (res.error) {
+      setError(res.error);
+      return;
+    }
     if (res.profile?.accountType) {
       router.replace(res.profile.accountType === 'turista' ? '/home' : '/business-dashboard');
     } else {
@@ -109,6 +125,19 @@ export default function Auth() {
               cargando={cargando}
               style={{ marginTop: Spacing.s }}
             />
+
+            <View style={styles.divisorContenedor}>
+              <View style={styles.lineaDivisor} />
+              <Text style={styles.textoDivisor}>o bien</Text>
+              <View style={styles.lineaDivisor} />
+            </View>
+
+            <Boton
+              titulo="Continuar con Google"
+              onPress={conectarGoogle}
+              cargando={cargandoGoogle}
+              variante="secundario"
+            />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -138,4 +167,20 @@ const styles = StyleSheet.create({
   pestanaTextoActivo: { color: Colors.primario },
   formulario: { gap: Spacing.m },
   error: { ...Type.nota, color: Colors.error },
+  divisorContenedor: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.s,
+    marginVertical: Spacing.s,
+  },
+  lineaDivisor: {
+    flex: 1,
+    height: 1.5,
+    backgroundColor: Colors.borde,
+  },
+  textoDivisor: {
+    ...Type.nota,
+    color: Colors.textoSuave,
+    fontSize: 12,
+  },
 });
