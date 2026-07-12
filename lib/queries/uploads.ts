@@ -5,11 +5,15 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { getSupabase, isSupabaseConfigured } from '../supabase';
 
-function base64ToBytes(base64: string): Uint8Array {
+/**
+ * base64 → ArrayBuffer. En React Native hay que subir un ArrayBuffer a Supabase
+ * Storage; pasar un Uint8Array a veces genera archivos de 0 bytes.
+ */
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
   const bin = atob(base64);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return bytes;
+  return bytes.buffer;
 }
 
 function contentTypeFromUri(uri: string): { ext: string; mime: string } {
@@ -38,7 +42,9 @@ export async function uploadImage(
     const base64 = await FileSystem.readAsStringAsync(localUri, {
       encoding: FileSystem.EncodingType.Base64,
     });
-    const { error } = await supabase.storage.from('uploads').upload(path, base64ToBytes(base64), {
+    if (!base64) return { url: null, error: 'La imagen está vacía o no se pudo leer.' };
+
+    const { error } = await supabase.storage.from('uploads').upload(path, base64ToArrayBuffer(base64), {
       contentType: mime,
       upsert: false,
     });

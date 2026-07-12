@@ -39,6 +39,22 @@ function toProfile(row: ProfileRow | null, userId: string, email: string, fallba
   };
 }
 
+/** Extrae params tanto del query (?a=b) como del fragmento (#a=b) de una URL. */
+function parseAuthParams(url: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const grab = (s: string) => {
+    for (const pair of s.split('&')) {
+      const [k, v] = pair.split('=');
+      if (k && v) out[decodeURIComponent(k)] = decodeURIComponent(v);
+    }
+  };
+  const q = url.split('?')[1];
+  if (q) grab(q.split('#')[0]);
+  const h = url.split('#')[1];
+  if (h) grab(h);
+  return out;
+}
+
 function toSpanish(message: string): string {
   const m = message.toLowerCase();
   if (m.includes('invalid login credentials')) return 'Correo o contraseña incorrectos.';
@@ -179,72 +195,59 @@ export async function signInWithGoogle(): Promise<AuthResult> {
     // Abrir la sesión de autenticación en el navegador del dispositivo
     const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
 
-    if (result.type === 'success' && result.url) {
-      // Parsear tokens de la URL hash fragment o query params
-      const cleanedUrl = result.url.replace('#', '?');
-      const parts = cleanedUrl.split('?');
-      const params: Record<string, string> = {};
-      if (parts.length > 1) {
-        const query = parts[1];
-        const pairs = query.split('&');
-        for (const pair of pairs) {
-          const [key, value] = pair.split('=');
-          if (key && value) {
-            params[decodeURIComponent(key)] = decodeURIComponent(value);
-          }
-        }
-      }
-
-      const access_token = params.access_token;
-      const refresh_token = params.refresh_token;
-
-      if (access_token && refresh_token) {
-        const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-          access_token,
-          refresh_token,
-        });
-
-        if (sessionError) return { profile: null, error: toSpanish(sessionError.message) };
-
-        const userId = sessionData.user?.id || '';
-        const email = sessionData.user?.email || '';
-
-        // Obtener el perfil asociado en profiles
-        const { data: row } = await supabase
-          .from('profiles')
-          .select('id, full_name, account_type, points')
-          .eq('id', userId)
-          .maybeSingle();
-
-        let profileRow = row;
-        if (!profileRow && userId) {
-          // Crear un perfil básico si el trigger en la base de datos no lo creó todavía
-          const { data: inserted } = await supabase
-            .from('profiles')
-            .insert({
-              id: userId,
-              full_name: sessionData.user?.user_metadata?.full_name || 'Usuario Google',
-              account_type: 'turista',
-              points: 0,
-            })
-            .select()
-            .single();
-          profileRow = inserted;
-        }
-
-        return {
-          profile: toProfile(
-            profileRow,
-            userId,
-            email,
-            sessionData.user?.user_metadata?.full_name || 'Usuario Google'
-          ),
-          error: null,
-        };
-      }
+    if (result.type !== 'success' || !result.url) {
+      return { profile: null, error: 'Inicio de sesión cancelado.' };
     }
 
-    return { profile: null, error: 'Inicio de sesión cancelado.' };
+    // Completar la sesión según el flujo devuelto:
+    // - PKCE (default de supabase-js v2): la URL trae ?code=... → exchangeCodeForSession
+    // - Implicit: la URL trae #access_token=...&refresh_token=... → setSession
+    const params = parseAuthParams(result.url);
+    let sessionUser: { id: string; email?: string; user_metadata?: Record<string, any> } | null = null;
+
+    if (params.code) {
+      const { data: sd, error: exErr } = await supabase.auth.exchangeCodeForSession(params.code);
+      if (exErr) return { profile: null, error: toSpanish(exErr.message) };
+      sessionUser = sd.user;
+    } else if (params.access_token && params.refresh_token) {
+      const { data: sd, error: setErr } = await supabase.auth.setSession({
+        access_token: params.access_token,
+        refresh_token: params.refresh_token,
+      });
+      if (setErr) return { profile: null, error: toSpanish(setErr.message) };
+      sessionUser = sd.user;
+    }
+
+    if (!sessionUser) {
+      const detalle = params.error_description || params.error;
+      return {
+        profile: null,
+        error: detalle ? toSpanish(detalle) : 'No se pudo completar el inicio de sesión con Google.',
+      };
+    }
+
+    const userId = sessionUser.id;
+    const email = sessionUser.email || '';
+    const nombreGoogle = sessionUser.user_metadata?.full_name || 'Usuario Google';
+
+    // Obtener el perfil (el trigger handle_new_user suele haberlo creado ya)
+    const { data: row } = await supabase
+      .from('profiles')
+      .select('id, full_name, account_type, points')
+      .eq('id', userId)
+      .maybeSingle();
+
+    let profileRow = row;
+    if (!profileRow && userId) {
+      const { data: inserted } = await supabase
+        .from('profiles')
+        .insert({ id: userId, full_name: nombreGoogle, points: 0 })
+        .select('id, full_name, account_type, points')
+        .single();
+      profileRow = inserted;
+    }
+
+    return { profile: toProfile(profileRow, userId, email, nombreGoogle), error: null };
   } catch (e) {
     return {
       profile: null,
