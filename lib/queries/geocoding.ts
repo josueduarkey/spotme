@@ -36,3 +36,24 @@ export async function geocodeAddress(address: string): Promise<GeocodeResult | n
     return null;
   }
 }
+
+/**
+ * lat/lng → nombre del departamento de El Salvador (ej. "Chalatenango").
+ * Lo usa createPlace() para etiquetar lugares de comunidad automáticamente
+ * (el panel de inteligencia territorial agrupa por departamento).
+ */
+export async function reverseGeocodeDepartment(lat: number, lng: number): Promise<string | null> {
+  const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=8`;
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'spotmi-hackathon/1.0 (turismo El Salvador PoC)' },
+    });
+    if (!res.ok) return null;
+    const data: { address?: { state?: string } } = await res.json();
+    const state = data.address?.state;
+    return state ? state.replace(/^Departamento de /i, '').trim() : null;
+  } catch (e) {
+    console.warn('reverseGeocodeDepartment:', e);
+    return null;
+  }
+}

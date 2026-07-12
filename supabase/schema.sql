@@ -24,7 +24,7 @@ create table if not exists public.profiles (
   created_at timestamptz not null default now()
 );
 
--- lugares turísticos precargados
+-- lugares turísticos (oficiales Y creados por la comunidad — pivote Fase 3)
 create table if not exists public.places (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
@@ -36,7 +36,31 @@ create table if not exists public.places (
   cover_image_url text,
   map_icon_url text,
   is_generated_image boolean not null default false,
+  source text not null default 'community',
+  created_by uuid references public.profiles (id),
+  verification_count int not null default 0,
+  is_verified boolean not null default false,
   created_at timestamptz not null default now()
+);
+
+-- Migración pivote Fase 3 (idempotente, para bases creadas antes del pivote)
+alter table public.places add column if not exists source text not null default 'community';
+alter table public.places add column if not exists created_by uuid references public.profiles (id);
+alter table public.places add column if not exists verification_count int not null default 0;
+alter table public.places add column if not exists is_verified boolean not null default false;
+alter table public.places drop constraint if exists places_source_check;
+alter table public.places add constraint places_source_check check (source in ('official', 'community'));
+-- Los seeds (sin created_by) son la capa oficial verificada.
+update public.places set source = 'official', is_verified = true
+  where created_by is null and source = 'community';
+
+-- confirmaciones comunitarias de lugares (un usuario no confirma 2 veces el mismo lugar)
+create table if not exists public.place_verifications (
+  id uuid primary key default gen_random_uuid(),
+  place_id uuid not null references public.places (id) on delete cascade,
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (place_id, user_id)
 );
 
 -- negocios / microemprendedores
@@ -72,8 +96,13 @@ create table if not exists public.challenges (
   title text not null unique,
   description text,
   points_reward int not null default 0,
-  type text check (type in ('upload_photo', 'visit_places', 'environmental'))
+  type text check (type in ('upload_photo', 'visit_places', 'environmental', 'create_place'))
 );
+
+-- Migración pivote Fase 3: nuevo tipo de reto 'create_place'
+alter table public.challenges drop constraint if exists challenges_type_check;
+alter table public.challenges add constraint challenges_type_check
+  check (type in ('upload_photo', 'visit_places', 'environmental', 'create_place'));
 
 create table if not exists public.user_challenges (
   id uuid primary key default gen_random_uuid(),
@@ -147,6 +176,39 @@ create trigger on_auth_user_created_confirm
   for each row execute function public.auto_confirm_email();
 
 
+-- =============== TRIGGER: verificación comunitaria de lugares (pivote Fase 3) ===============
+-- Al insertar una confirmación, recuenta y marca is_verified al llegar a 3.
+-- SECURITY DEFINER: el usuario que confirma no es dueño de la fila de `places`,
+-- así que su update directo lo bloquearía RLS; el trigger lo hace por él.
+-- (Es función de trigger — PostgREST no puede invocarla directamente.)
+
+create or replace function public.handle_place_verification()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_count int;
+begin
+  select count(*) into v_count
+    from public.place_verifications
+    where place_id = new.place_id;
+
+  update public.places
+    set verification_count = v_count,
+        is_verified = (v_count >= 3)
+    where id = new.place_id;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_place_verification on public.place_verifications;
+create trigger on_place_verification
+  after insert on public.place_verifications
+  for each row execute function public.handle_place_verification();
+
 -- =============== RLS ===============
 
 alter table public.profiles enable row level security;
@@ -174,6 +236,31 @@ create policy "profiles_update_own" on public.profiles
 drop policy if exists "places_select_all" on public.places;
 create policy "places_select_all" on public.places
   for select using (true);
+
+-- Pivote Fase 3: cualquier usuario autenticado crea lugares de comunidad,
+-- pero no puede falsificar lugares 'official' ni atribuírselos a otro.
+drop policy if exists "places_insert_community" on public.places;
+create policy "places_insert_community" on public.places
+  for insert to authenticated
+  with check (source = 'community' and (select auth.uid()) = created_by);
+
+alter table public.place_verifications enable row level security;
+
+drop policy if exists "place_verifications_select_all" on public.place_verifications;
+create policy "place_verifications_select_all" on public.place_verifications
+  for select using (true);
+
+-- Confirmar: solo a nombre propio y nunca el lugar que uno mismo creó.
+drop policy if exists "place_verifications_insert_own" on public.place_verifications;
+create policy "place_verifications_insert_own" on public.place_verifications
+  for insert to authenticated
+  with check (
+    (select auth.uid()) = user_id
+    and not exists (
+      select 1 from public.places p
+      where p.id = place_id and p.created_by = (select auth.uid())
+    )
+  );
 
 drop policy if exists "businesses_select_all" on public.businesses;
 create policy "businesses_select_all" on public.businesses
@@ -296,7 +383,9 @@ insert into public.challenges (title, description, points_reward, type) values
   ('Primera postal', 'Sube tu primera foto geolocalizada en cualquier lugar del mapa.', 50, 'upload_photo'),
   ('Cazador de dioramas', 'Visita y sube fotos en 3 lugares distintos.', 150, 'visit_places'),
   ('Guardián de la costa', 'Participa en una jornada de limpieza de playa y documenta con foto.', 200, 'environmental'),
-  ('Ruta de las Flores completa', 'Visita Juayúa y 2 puntos más de la Ruta de las Flores.', 250, 'visit_places')
+  ('Ruta de las Flores completa', 'Visita Juayúa y 2 puntos más de la Ruta de las Flores.', 250, 'visit_places'),
+  ('Fundador', 'Crea tu primer lugar en el mapa — un rincón que aún no existía.', 100, 'create_place'),
+  ('Cartógrafo comunitario', 'Logra que un lugar creado por ti sea verificado por la comunidad.', 300, 'create_place')
 on conflict (title) do nothing;
 
 -- =============== SEED: negocios demo (capa de negocios del mapa) ===============

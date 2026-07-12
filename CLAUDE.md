@@ -36,27 +36,42 @@ Hackathon de Turismo Creativo Vol. 1 — PoC construido en 2 días con dos cuent
 
 **Fase 3 — SIGUIENTE (editar aquí las nuevas features antes de arrancar):** Contenido Generado por Usuario (cámara/galería y subida de fotos). Fase 3 B propuesta: `uploadPhoto()` en `lib/queries/uploads.ts` (Storage bucket `uploads` + fila en tabla `uploads` + asociación al lugar más cercano por distancia).
 
+**Fase 3 — Cuenta B: COMPLETA ✅** (verificada E2E contra Supabase real: crear lugar → foto a Storage → 3 confirmaciones de usuarios distintos → `is_verified=true` automático por trigger; creador no puede autoconfirmar (RLS 42501), doble confirmación bloqueada (unique 23505))
+
+- `createPlace(input)` real en `lib/queries/places.ts`: sube `photoUri` al bucket `uploads` (helper `uploadImage` en `lib/queries/uploads.ts`, usa `expo-file-system/legacy` — nativo ya incluido en el APK, no requiere rebuild), resuelve el **departamento automáticamente por reverse geocoding** (`reverseGeocodeDepartment` en `geocoding.ts`) e inserta con `source='community'`. Error legible si el nombre ya existe.
+- `confirmPlace(placeId)` real: inserta en `place_verifications`; el trigger `on_place_verification` (SECURITY DEFINER) recuenta y marca `is_verified` a las 3 — nada de lógica de conteo en el cliente, robusto ante carreras.
+- `getPlaces()` ya incluye lugares de comunidad con los campos nuevos (`source`, `createdBy`, `verificationCount`, `isVerified`) mapeados al tipo `Place` extendido.
+- Schema migrado en DB real (idempotente): columnas nuevas en `places` (seeds marcados `official`+verificados), tabla `place_verifications`, reto tipo `create_place` (+2 retos seed: Fundador, Cartógrafo comunitario), políticas RLS anti-trampa.
+
+**🔄 PIVOTE (2026-07-11): la Fase 3 ahora incluye crear lugares desde cero, no solo subir fotos a lugares existentes.** Ver sección 0 para la justificación completa (esto refuerza el digital twin, no lo diluye) y sección 9 para los prompts actualizados de Cuenta A y Cuenta B. Cambios de modelo de datos: `places` ganó `source`, `created_by`, `verification_count`, `is_verified`; nueva tabla `place_verifications`. Cambios de pantallas: nueva pantalla 7b "Crear lugar nuevo"; pantalla 7 (ficha) gana botón "Confirmar que existe" para lugares sin verificar. Usar los prompts de la sección 9, no los de la sección 8 (esos ya están completados).
 
 ## 0. Resumen del producto
 
+**⚡ Pivote decidido (2026-07-11):** el twin ya no depende de un catálogo curado. Los turistas pueden **crear lugares nuevos desde cero** (pin en el mapa + nombre + descripción + foto), no solo fotografiar los ya existentes. Los 8-10 lugares oficiales se quedan como capa "semilla" verificada, pero el crecimiento real del mapa lo hace la comunidad. Esto no es un desvío del digital twin — es la versión más legítima del concepto (ver justificación abajo).
+
 Spotmi es un mapa interactivo (digital twin) de El Salvador donde:
 
-- **Turistas** descubren lugares emblemáticos por departamento, suben fotos, planifican rutas con presupuesto estimado, y ganan recompensas por retos (fotos, visitas, retos ambientales).
+- **Turistas** descubren lugares (oficiales y creados por otros turistas), **crean lugares nuevos que aún no existen en el mapa**, suben fotos, planifican rutas con presupuesto estimado, y ganan recompensas y puntos por explorar, crear y documentar.
 - **Negocios / microemprendedores** se registran, fijan su ubicación y suben fotos de su local para ser descubiertos por los turistas.
 
-El "twin" no es un modelo 3D: es un mapa 2D vivo que se llena con contenido real generado por los propios usuarios (UGC), capa por capa.
+El "twin" no es un modelo 3D ni un catálogo fijo: es un mapa 2D vivo que la propia comunidad construye, capa por capa, en tiempo real.
 
-### Por qué esto es un digital twin (y no solo un mapa)
+### Por qué esto es un digital twin (y no solo un mapa) — y por qué el pivote lo hace más fuerte, no menos
 
-El reto original pide explícitamente **múltiples capas de información que normalmente no se visualizan en conjunto**, para generar un insight cruzando al menos dos de ellas. Spotmi cumple esto con capas togglables sobre el mismo mapa:
+La literatura académica sobre digital twins en turismo distingue dos enfoques. El más común y más débil usa escaneo 3D y GIS para habilitar visitas en VR/AR, donde el twin solo recibe datos del original sin comunicación bilateral, y no captura datos dinámicos del sistema turístico real — es, en esencia, una foto fija bonita. El enfoque que sí califica como digital twin en el sentido estricto es el que aprovecha **fuentes de datos dinámicas — minería de contenido generado por usuarios, sensores, comportamiento real** — para monitorear actividad turística y dar retroalimentación útil a quienes toman decisiones sobre el territorio.
 
-1. **Capa de lugares turísticos** (estática, precargada)
-2. **Capa de negocios/microemprendedores** (crece con cada registro)
-3. **Capa de actividad de turistas** (heatmap de fotos subidas — dónde está la gente realmente)
-4. **Capa de eventos** (temporal, por fecha)
-5. **Capa de retos ambientales/sostenibilidad** (dónde se están completando retos de reciclaje, etc.)
+Spotmi con el pivote cae directamente en el segundo enfoque: el mapa no es una lista que alguien decidió de antemano, es un espejo que se actualiza con lo que la gente real está descubriendo, visitando y documentando. Cada lugar nuevo creado por un turista es un dato fresco entrando al twin — el mapa literalmente cambia de forma con el comportamiento real de la gente, que es la definición central de un digital twin: una representación virtual data-driven que integra datos en tiempo real para reflejar el estado de su contraparte física.
 
-El mapa no es solo un directorio de pines: es una **representación viva del territorio** que un usuario puede leer combinando capas — por ejemplo, cruzar "actividad de turistas" con "negocios registrados" para ver zonas con alta afluencia pero baja densidad de negocios (oportunidad de negocio real). Esa lectura cruzada es lo que hace que Spotmi sea un digital twin y no un mapa turístico más — y es literalmente el criterio "Mejora" del framework COTMEA del hackathon.
+**Las capas togglables sobre el mismo mapa:**
+
+1. **Capa de lugares oficiales** (semilla verificada, los 8-10 precargados)
+2. **Capa de lugares creados por la comunidad** (crece con cada turista que descubre algo nuevo — el corazón del pivote)
+3. **Capa de negocios/microemprendedores** (crece con cada registro)
+4. **Capa de actividad de turistas** (heatmap de fotos subidas — dónde está la gente realmente)
+5. **Capa de eventos** (temporal, por fecha)
+6. **Capa de retos ambientales/sostenibilidad** (dónde se están completando retos de reciclaje, etc.)
+
+El insight cruzado que pedía el framework original (Contexto/Oportunidad/Mejora) ahora es más rico: se puede leer, por ejemplo, dónde la comunidad está creando lugares nuevos que el sector oficial de turismo ni siquiera tenía mapeados — eso es inteligencia territorial real generada de abajo hacia arriba, no simulada.
 
 ## 1. Stack técnico
 
@@ -98,7 +113,7 @@ profiles (
   created_at timestamp default now()
 )
 
--- lugares turísticos precargados
+-- lugares turísticos (oficiales Y creados por la comunidad)
 places (
   id uuid PK,
   name text,
@@ -108,9 +123,22 @@ places (
   lng float,
   category text,          -- naturaleza, cultura, gastronomía, aventura
   cover_image_url text,   -- foto real, si existe
-  map_icon_url text,      -- diorama isométrico generado (ver sección 7), usado como ícono de pin en el mapa
+  map_icon_url text,      -- diorama isométrico generado (solo lugares oficiales, ver sección 6)
   is_generated_image boolean default false,
+  source text check (source in ('official','community')) default 'community',
+  created_by uuid references profiles(id),  -- null si es oficial (seed)
+  verification_count int default 0,          -- cuántos otros usuarios confirmaron el lugar
+  is_verified boolean default false,          -- true automáticamente al llegar a 3 confirmaciones
   created_at timestamp default now()
+)
+
+-- confirmaciones de lugares creados por la comunidad (evita que un mismo usuario confirme 2 veces)
+place_verifications (
+  id uuid PK,
+  place_id uuid references places(id),
+  user_id uuid references profiles(id),
+  created_at timestamp default now(),
+  unique (place_id, user_id)
 )
 
 -- negocios
@@ -146,7 +174,7 @@ challenges (
   title text,
   description text,
   points_reward int,
-  type text  -- 'upload_photo','visit_places','environmental'
+  type text  -- 'upload_photo','visit_places','environmental','create_place'
 )
 
 user_challenges (
@@ -186,7 +214,7 @@ planned_routes (
 2. Login / Register
 3. Selección de tipo de cuenta: turista o negocio
 
-**Turista** 4. Onboarding turista (permisos de ubicación + selección de intereses) 5. Home (CTA + mini-mapa, Top 5 lugares, Eventos próximos) 6. Mapa full (departamentos expandibles, **selector de capas togglables**: Lugares / Negocios / Actividad de turistas / Eventos / Retos ambientales — este selector es el corazón del digital twin) 7. Ficha de lugar o negocio (fotos, descripción, botón "Cómo llegar", botón "Subir foto") 8. Subir foto (cámara/galería + geolocalización automática) 9. Planificar ruta (selección múltiple de lugares en el mapa) 10. Ruta generada (trazado, orden sugerido, tiempo, presupuesto, botón "Iniciar navegación") 11. Retos y recompensas (lista de retos activos + catálogo canjeable) 12. Perfil turista (fotos, puntos, insignias, historial) 13. Eventos (lista + detalle) 17. **Panel de inteligencia territorial** — accesible desde el mapa o el perfil, cruza al menos 2 capas de datos y muestra un insight en texto plano, ej: "El Trifinio tiene alta actividad de turistas esta semana pero solo 2 negocios registrados — oportunidad para nuevos emprendedores." Esta es la pantalla que demuestra ante el jurado que el twin genera valor real, no solo se ve bonito.
+**Turista** 4. Onboarding turista (permisos de ubicación + selección de intereses) 5. Home (CTA + mini-mapa, Top 5 lugares, Eventos próximos) 6. Mapa full (departamentos expandibles, **selector de capas togglables**: Lugares oficiales / Lugares de la comunidad / Negocios / Actividad de turistas / Eventos / Retos ambientales — este selector es el corazón del digital twin; botón flotante "+" para crear lugar) 7. Ficha de lugar o negocio (fotos, descripción, botón "Cómo llegar", botón "Subir foto"; si es lugar de comunidad sin verificar: botón "Confirmar que existe" + badge "Nuevo, sin verificar") 7b. **Crear lugar nuevo** — el turista suelta un pin en el mapa (o usa su ubicación actual), completa nombre, categoría, descripción corta y una foto obligatoria; se publica de inmediato como lugar de comunidad "sin verificar" 8. Subir foto (cámara/galería + geolocalización automática) 9. Planificar ruta (selección múltiple de lugares en el mapa, oficiales o de comunidad) 10. Ruta generada (trazado, orden sugerido, tiempo, presupuesto, botón "Iniciar navegación") 11. Retos y recompensas (lista de retos activos + catálogo canjeable; incluye retos de "crear lugar" y "explorador") 12. Perfil turista (fotos, puntos, insignias —incluye insignia "Explorador" por lugares creados—, historial) 13. Eventos (lista + detalle) 17. **Panel de inteligencia territorial** — accesible desde el mapa o el perfil, cruza al menos 2 capas de datos y muestra un insight en texto plano, ej: "Se crearon 5 lugares nuevos esta semana en Chalatenango, una zona sin negocios registrados — oportunidad para nuevos emprendedores." Esta es la pantalla que demuestra ante el jurado que el twin genera valor real, no solo se ve bonito.
 
 **Negocio** 14. Onboarding negocio (datos del negocio + ubicación en mapa) 15. Dashboard negocio (vista pública + métricas simples: vistas, interacciones) 16. Editar perfil de negocio (fotos, horario, descripción, pin arrastrable)
 
@@ -241,12 +269,12 @@ _Done cuando:_ login funcional conecta con Supabase Auth real, y `places` tiene 
 
 _Done cuando:_ el mapa muestra pines reales desde la base de datos, se pueden togglear al menos 2 capas, y cada pin abre su ficha con datos reales.
 
-### Día 1 — Noche (Fase 3: Contenido generado por usuario)
+### Día 1 — Noche (Fase 3: Creación comunitaria de lugares + contenido generado por usuario)
 
-**Cuenta A:** Pantalla de subir foto (8), conexión con cámara/galería del dispositivo.
-**Cuenta B:** Storage de Supabase para fotos, guardar geolocalización automática, lógica de asociar foto subida a lugar/negocio más cercano.
+**Cuenta A:** Pantalla "Crear lugar nuevo" (7b): soltar pin en el mapa o usar ubicación actual, formulario (nombre, categoría, descripción, foto obligatoria), publicación inmediata como lugar de comunidad sin verificar. Pantalla de subir foto (8) para lugares ya existentes. Botón "Confirmar que existe" en la ficha de lugares de comunidad sin verificar (7). Badges visuales "Nuevo" vs. verificado en los pines (sección 6.2).
+**Cuenta B:** `createPlace()` en `lib/queries/places.ts` (inserta en `places` con `source='community'`, `created_by`, `is_verified=false`). `confirmPlace()` que inserta en `place_verifications` (respetando el unique constraint) y actualiza `verification_count`, marcando `is_verified=true` al llegar a 3. Storage de Supabase para fotos, geolocalización automática, lógica de asociar foto subida al lugar más cercano cuando no se está creando uno nuevo.
 
-_Done cuando:_ un usuario puede subir una foto real y verla reflejada en la ficha del lugar.
+_Done cuando:_ un turista puede crear un lugar nuevo desde cero, aparece de inmediato en el mapa de otro usuario con el badge "Nuevo", y al recibir 3 confirmaciones distintas pasa a verificado automáticamente.
 
 ### Día 2 — Mañana (Fase 4: Planificación y negocio)
 
@@ -257,8 +285,8 @@ _Done cuando:_ seleccionar 3 lugares en el mapa genera una ruta trazada con tiem
 
 ### Día 2 — Mediodía (Fase 5: Gamificación + inteligencia territorial)
 
-**Cuenta A:** Pantallas 11-12 (retos y recompensas, perfil con puntos e insignias), pantalla 17 (panel de inteligencia territorial) y las capas restantes del selector de mapa (Actividad de turistas como heatmap de `uploads`, Eventos, Retos ambientales).
-**Cuenta B:** Lógica de asignación de puntos (subir foto = X puntos, completar reto = Y puntos), tabla `user_challenges` funcional, query que cruce 2 capas (ej. `uploads` agrupados por departamento vs. conteo de `businesses` por departamento) para alimentar el panel de insights con un dato real, no inventado.
+**Cuenta A:** Pantallas 11-12 (retos y recompensas, perfil con puntos e insignias —incluye insignia "Explorador" por lugares creados—), pantalla 17 (panel de inteligencia territorial) y las capas restantes del selector de mapa (Actividad de turistas como heatmap de `uploads`, Eventos, Retos ambientales).
+**Cuenta B:** Lógica de asignación de puntos (crear lugar = X puntos, subir foto = Y puntos, completar reto = Z puntos, lugar creado llega a verificado = puntos extra para el creador), tabla `user_challenges` funcional, query que cruce 2 capas (ej. lugares de comunidad creados agrupados por departamento vs. conteo de `businesses` por departamento) para alimentar el panel de insights con un dato real, no inventado.
 
 _Done cuando:_ subir una foto o completar un reto suma puntos visibles en el perfil, y el panel de inteligencia territorial muestra al menos un insight generado con datos reales cruzando 2 capas.
 
@@ -302,22 +330,33 @@ Vive en `constants/theme.ts`. No renegociar esto en fases futuras salvo que algo
 - **Tipografía:** Fraunces para titulares (con aire editorial/museo, conecta con la estética de los dioramas), Figtree para cuerpo de texto.
 - **Elemento firma — la "peana":** botones y cards llevan una base inferior sólida, como pequeños pedestales de exhibición, en eco directo a los dioramas del mapa. Mantener este detalle en todo componente nuevo para que la UI y los íconos del mapa se sientan como el mismo universo visual.
 
+### 6.2 Pines de comunidad vs. pines oficiales (nuevo por el pivote)
+
+Los dioramas de arriba solo existen para los 8-10 lugares oficiales — no se genera un diorama por cada lugar que cree un turista, sería inviable en el tiempo del hackathon. Para lugares de comunidad:
+
+- El pin usa **la primera foto que subió el creador** como thumbnail circular (con un borde delgado en el turquesa primario), no un diorama.
+- Mientras `is_verified = false`: el pin lleva un badge pequeño "Nuevo" en tierra `#C75B39`.
+- Al llegar a 3 confirmaciones (`verification_count >= 3` vía `place_verifications`), `is_verified` pasa a `true` y el badge cambia a un check turquesa — visualmente comunica "esto ya lo confirmó la comunidad" sin necesitar moderación manual de nadie del equipo durante la demo.
+- Esta distinción (diorama = oficial/curado, foto de usuario = comunidad/emergente) es también parte de la narrativa del pitch: se ve a simple vista qué parte del mapa es la semilla y qué parte está creciendo en vivo.
+
 ## 7. Criterios de éxito del MVP (checklist final)
 
 - [ ] Registro/login funcional (turista y negocio)
-- [ ] Mapa muestra al menos 8 lugares reales por departamento
+- [ ] Mapa muestra al menos 8 lugares oficiales reales por departamento
+- [ ] Un turista puede crear un lugar nuevo desde cero (pin + nombre + descripción + foto) y aparece de inmediato en el mapa de otros usuarios
+- [ ] Existe un mecanismo de confianza comunitaria simple (confirmaciones que verifican un lugar de comunidad)
 - [ ] Ficha de lugar muestra info + fotos (reales o generadas)
 - [ ] Turista puede subir foto geolocalizada
 - [ ] Negocio puede registrar su ubicación y aparecer en el mapa
 - [ ] Planificar ruta genera trazado + tiempo + presupuesto estimado
 - [ ] Botón "cómo llegar" abre navegación externa (Google Maps)
-- [ ] Sistema de puntos/retos suma puntos visibles en perfil
-- [ ] El mapa tiene al menos 3 capas togglables (lugares, negocios, actividad de turistas)
+- [ ] Sistema de puntos/retos suma puntos visibles en perfil, incluyendo puntos por crear lugares
+- [ ] El mapa tiene al menos 4 capas togglables (lugares oficiales, lugares de comunidad, negocios, actividad de turistas)
 - [ ] El panel de inteligencia territorial muestra un insight real cruzando al menos 2 capas
 - [x] App corre en celular real para la demo (Android: APK dev build de EAS + Metro; iPhone: Expo Go vía QR)
-- [ ] Los 8-10 lugares tienen su ícono diorama generado y consistente en el mapa
+- [ ] Los 8-10 lugares oficiales tienen su ícono diorama generado y consistente en el mapa
 
-## 8. Prompts iniciales para arrancar Fase 1 (copiar y pegar en cada cuenta)
+## 8. Prompts de Fase 1 (histórico — ya completados, se dejan solo de referencia)
 
 ### Prompt para Cuenta A (Frontend / UX)
 
@@ -394,3 +433,67 @@ anon key de Supabase) para conectar en la Fase 2.
 ```
 
 Cuando ambas cuentas terminen la Fase 1, sincronicen: Cuenta A conecta login real con las credenciales de Supabase que generó Cuenta B, y arrancan la Fase 2 juntas.
+
+## 9. Prompts para arrancar Fase 3 (usar estos AHORA — Fases 1 y 2 ya están completas)
+
+### Prompt para Cuenta A (Frontend / UX)
+
+```
+Estás construyendo el frontend de Spotmi, un digital twin turístico de El Salvador,
+en Expo (React Native). Lee el CLAUDE.md completo, especialmente la Bitácora de
+estado, la sección 0 (el pivote: los turistas ahora pueden crear lugares nuevos,
+no solo fotografiar los existentes) y la sección 6.2 (cómo se ven los pines de
+comunidad vs. oficiales).
+
+Las Fases 1 y 2 ya están completas: hay auth real, mapa con Mapbox/react-native-maps
+funcionando con capas togglables, y dioramas de los 8-10 lugares oficiales cargados.
+Este pivote es la Fase 3.
+
+Tu trabajo en esta sesión:
+1. Pantalla "Crear lugar nuevo" (7b del mapa de pantallas): el usuario suelta un pin
+   en el mapa full o usa su ubicación actual, completa un formulario corto (nombre,
+   categoría, descripción, foto obligatoria vía expo-image-picker) y publica. Debe
+   sentirse rápido — máximo 3 pasos, sin fricción, porque la gamificación depende de
+   que sea fácil crear.
+2. Actualiza la ficha de lugar (pantalla 7): si el lugar es de comunidad y no está
+   verificado, muestra el badge "Nuevo" y un botón "Confirmar que existe" visible.
+3. Actualiza los pines del mapa (componente de marcador) para distinguir oficial
+   (diorama) vs. comunidad no verificado (foto + badge tierra) vs. comunidad
+   verificado (foto + check turquesa) — sección 6.2 tiene el detalle exacto.
+4. Usa mocks para createPlace/confirmPlace si Cuenta B aún no las tiene listas;
+   deja los call-sites claros para que Cuenta B solo reemplace el cuerpo.
+
+No toques lib/queries/ más allá de importar funciones que ya existan o dejar mocks
+claramente marcados como TODO. Al terminar, resume qué construiste y qué necesitas
+de Cuenta B para que quede 100% real.
+```
+
+### Prompt para Cuenta B (Backend / Datos / Mapa)
+
+```
+Estás construyendo el backend de Spotmi, un digital twin turístico de El Salvador,
+sobre Supabase. Lee el CLAUDE.md completo, especialmente la Bitácora de estado, la
+sección 0 (el pivote: los turistas ahora pueden crear lugares nuevos) y la sección 2
+(el modelo de datos ya tiene los campos nuevos: places.source, places.created_by,
+places.verification_count, places.is_verified, y la tabla place_verifications).
+
+Las Fases 1 y 2 ya están completas. Este pivote es la Fase 3.
+
+Tu trabajo en esta sesión:
+1. Actualiza supabase/schema.sql con los campos nuevos de `places` y la tabla
+   `place_verifications` (con el unique constraint place_id+user_id para que un
+   mismo usuario no pueda confirmar el mismo lugar dos veces).
+2. Implementa `createPlace()` en lib/queries/places.ts: inserta en `places` con
+   source='community', created_by=usuario actual, is_verified=false.
+3. Implementa `confirmPlace()`: inserta en `place_verifications`, incrementa
+   `verification_count` en `places`, y marca `is_verified=true` automáticamente
+   al llegar a 3 confirmaciones (hazlo con un trigger de Postgres si es más
+   robusto que hacerlo desde el cliente).
+4. Actualiza las RLS policies de `places` para permitir insert a cualquier
+   usuario autenticado, pero mantener las reglas de lectura abiertas.
+5. Asegúrate de que la query que alimenta el mapa (la que ya existe de Fase 2)
+   incluya ahora también los lugares de comunidad, no solo los oficiales.
+
+No construyas pantallas de frontend. Al terminar, resume las funciones nuevas
+disponibles en lib/queries/places.ts para que Cuenta A las conecte.
+```

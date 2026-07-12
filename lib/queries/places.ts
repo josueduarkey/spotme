@@ -4,6 +4,8 @@
  */
 import { Categoria, MOCK_PLACES, Place } from '../../constants/mock';
 import { getSupabase, isSupabaseConfigured } from '../supabase';
+import { reverseGeocodeDepartment } from './geocoding';
+import { uploadImage } from './uploads';
 
 interface PlaceRow {
   id: string;
@@ -15,9 +17,14 @@ interface PlaceRow {
   category: Categoria | null;
   cover_image_url: string | null;
   map_icon_url: string | null;
+  source: 'official' | 'community';
+  created_by: string | null;
+  verification_count: number;
+  is_verified: boolean;
 }
 
-const PLACE_COLUMNS = 'id, name, department, description, lat, lng, category, cover_image_url, map_icon_url';
+const PLACE_COLUMNS =
+  'id, name, department, description, lat, lng, category, cover_image_url, map_icon_url, source, created_by, verification_count, is_verified';
 
 function toPlace(row: PlaceRow): Place {
   return {
@@ -30,6 +37,10 @@ function toPlace(row: PlaceRow): Place {
     category: row.category ?? 'naturaleza',
     coverImageUrl: row.cover_image_url,
     mapIconUrl: row.map_icon_url,
+    source: row.source,
+    createdBy: row.created_by,
+    verificationCount: row.verification_count,
+    isVerified: row.is_verified,
   };
 }
 
@@ -53,6 +64,125 @@ export async function getPlaceById(id: string): Promise<Place | null> {
     return null;
   }
   return data ? toPlace(data as PlaceRow) : null;
+}
+
+// ---------------------------------------------------------------------------
+// Pivote Fase 3 — conectado a Supabase real (Cuenta B).
+// createPlace: sube la foto a Storage, resuelve el departamento por reverse
+// geocoding (Nominatim) e inserta con source='community'. confirmPlace:
+// inserta en place_verifications; un trigger de Postgres recuenta y marca
+// is_verified=true al llegar a 3 (robusto ante carreras, nada en el cliente).
+// Sin `.env`, ambas caen al mock en memoria original.
+// ---------------------------------------------------------------------------
+
+export interface NewPlaceInput {
+  name: string;
+  category: Categoria;
+  description: string;
+  lat: number;
+  lng: number;
+  /** URI local de expo-image-picker; Cuenta B la sube a Storage. */
+  photoUri: string;
+}
+
+export async function createPlace(input: NewPlaceInput): Promise<{ place: Place | null; error: string | null }> {
+  if (!isSupabaseConfigured) {
+    // MOCK: inserta en memoria para que el mapa lo muestre sin backend.
+    await new Promise((r) => setTimeout(r, 500));
+    const place: Place = {
+      id: `local-${Date.now()}`,
+      name: input.name.trim(),
+      department: 'Por confirmar',
+      description: input.description.trim(),
+      lat: input.lat,
+      lng: input.lng,
+      category: input.category,
+      coverImageUrl: input.photoUri,
+      mapIconUrl: null,
+      source: 'community',
+      createdBy: 'mock-user-1',
+      verificationCount: 0,
+      isVerified: false,
+    };
+    MOCK_PLACES.push(place);
+    return { place, error: null };
+  }
+
+  const supabase = getSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { place: null, error: 'Inicia sesión para crear un lugar.' };
+
+  // 1. Foto obligatoria → Storage (bucket público `uploads`)
+  const { url: coverUrl, error: uploadError } = await uploadImage(input.photoUri, 'places', user.id);
+  if (uploadError) return { place: null, error: `No se pudo subir la foto: ${uploadError}` };
+
+  // 2. Departamento automático desde las coordenadas (alimenta el panel territorial)
+  const department = (await reverseGeocodeDepartment(input.lat, input.lng)) ?? 'El Salvador';
+
+  // 3. Insertar como lugar de comunidad sin verificar
+  const { data, error } = await supabase
+    .from('places')
+    .insert({
+      name: input.name.trim(),
+      department,
+      description: input.description.trim(),
+      lat: input.lat,
+      lng: input.lng,
+      category: input.category,
+      cover_image_url: coverUrl,
+      source: 'community',
+      created_by: user.id,
+      is_verified: false,
+    })
+    .select(PLACE_COLUMNS)
+    .single();
+
+  if (error) {
+    if (error.code === '23505') return { place: null, error: 'Ya existe un lugar con ese nombre.' };
+    return { place: null, error: error.message };
+  }
+  return { place: toPlace(data as PlaceRow), error: null };
+}
+
+export async function confirmPlace(placeId: string): Promise<{ verificationCount: number; isVerified: boolean; error: string | null }> {
+  if (!isSupabaseConfigured) {
+    // MOCK: muta el lugar en memoria.
+    await new Promise((r) => setTimeout(r, 400));
+    const p = MOCK_PLACES.find((x) => x.id === placeId);
+    if (!p) return { verificationCount: 0, isVerified: false, error: 'Lugar no encontrado.' };
+    p.verificationCount = (p.verificationCount ?? 0) + 1;
+    p.isVerified = p.verificationCount >= 3;
+    return { verificationCount: p.verificationCount, isVerified: p.isVerified, error: null };
+  }
+
+  const supabase = getSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { verificationCount: 0, isVerified: false, error: 'Inicia sesión para confirmar lugares.' };
+
+  const { error } = await supabase.from('place_verifications').insert({ place_id: placeId, user_id: user.id });
+  if (error) {
+    let msg = error.message;
+    if (error.code === '23505') msg = 'Ya confirmaste este lugar.';
+    if (error.code === '42501') msg = 'No puedes confirmar un lugar que creaste tú.';
+    return { verificationCount: 0, isVerified: false, error: msg };
+  }
+
+  // El trigger on_place_verification ya recontó; leemos el resultado final.
+  const { data } = await supabase
+    .from('places')
+    .select('verification_count, is_verified')
+    .eq('id', placeId)
+    .single();
+
+  return {
+    verificationCount: data?.verification_count ?? 0,
+    isVerified: data?.is_verified ?? false,
+    error: null,
+  };
 }
 
 /** Top N para el Home, ordenado por actividad real (cantidad de fotos subidas). */
