@@ -2,8 +2,19 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { Globe, MapPin, Compass } from 'lucide-react-native';
 import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { WebView } from 'react-native-webview';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+// Carga segura del módulo nativo de WebView. El require con string literal deja
+// que Metro lo empaquete igual que un import; el try/catch impide que un APK
+// viejo —compilado antes de incluir react-native-webview— tumbe TODA la app al
+// evaluar el bundle (por eso dejaba de hacer reload). Si el módulo no está,
+// WebView queda null y el tab 3D muestra un aviso; el resto de la app sigue viva.
+let WebView: any = null;
+try {
+  WebView = require('react-native-webview').WebView;
+} catch {
+  WebView = null;
+}
 import { getPlaces } from '../../lib/queries/places';
 import { Place } from '../../constants/mock';
 import { Colors, Radius, Spacing, Type, Fonts, Peana } from '../../constants/theme';
@@ -13,9 +24,43 @@ import Constants from 'expo-constants';
 const GOOGLE_MAPS_API_KEY =
   Constants.expoConfig?.android?.config?.googleMaps?.apiKey || 'AIzaSyBE5rKSq03ZEN8tlGbSaQhOnGgf6IIEoJ4';
 
+/** Aviso cuando el APK instalado no trae el módulo nativo de WebView. */
+function Fallback3D() {
+  return (
+    <View style={styles.fallback}>
+      <Globe size={44} color={Colors.acento} strokeWidth={1.8} />
+      <Text style={styles.fallbackTitulo}>Vista 3D no disponible en este build</Text>
+      <Text style={styles.fallbackTexto}>
+        El sobrevuelo 3D usa un módulo nativo (WebView) que no está en el APK instalado. Instala el
+        APK más reciente de EAS Build para explorarlo. El resto de la app funciona normal.
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * Atrapa el fallo de montaje del WebView nativo en un APK desactualizado, para
+ * que nunca tumbe toda la pantalla: cae al aviso y el resto sigue funcionando.
+ */
+class WebViewErrorBoundary extends React.Component<
+  { children: React.ReactNode; fallback: React.ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: unknown) {
+    console.warn('WebView 3D no pudo montarse:', error);
+  }
+  render() {
+    return this.state.hasError ? this.props.fallback : this.props.children;
+  }
+}
+
 export default function Gemelo3D() {
   const router = useRouter();
-  const webViewRef = useRef<WebView>(null);
+  const webViewRef = useRef<any>(null);
   const [lugares, setLugares] = useState<Place[]>([]);
   const [cargando, setCargando] = useState(true);
 
@@ -118,11 +163,13 @@ export default function Gemelo3D() {
             // Cargar los 3D Tiles Fotorrealistas de Google Maps Platform
             try {
               const tileset = await Cesium.Cesium3DTileset.fromUrl(
-                "https://tile.googleapis.com/v1/3dtiles/datasets/google-photorealistic/tileset?key=" + API_KEY
+                "https://tile.googleapis.com/v1/3dtiles/root.json?key=" + API_KEY
               );
               viewer.scene.primitives.add(tileset);
             } catch (error) {
               console.error("Error al cargar 3D Tiles:", error);
+              const loader = document.getElementById('loading');
+              if (loader) loader.innerText = 'No se pudieron cargar los tiles 3D. Revisa conexión o la Map Tiles API.';
             }
 
             // Ocultar cargador
@@ -231,16 +278,20 @@ export default function Gemelo3D() {
             <ActivityIndicator size="large" color={Colors.primario} />
             <Text style={styles.cargandoTexto}>Consultando Base de Datos...</Text>
           </View>
+        ) : !WebView ? (
+          <Fallback3D />
         ) : (
-          <WebView
-            ref={webViewRef}
-            originWhitelist={['*']}
-            source={{ html: generateHTML() }}
-            style={styles.webView}
-            javaScriptEnabled={true}
-            domStorageEnabled={true}
-            onMessage={handleWebViewMessage}
-          />
+          <WebViewErrorBoundary fallback={<Fallback3D />}>
+            <WebView
+              ref={webViewRef}
+              originWhitelist={['*']}
+              source={{ html: generateHTML() }}
+              style={styles.webView}
+              javaScriptEnabled={true}
+              domStorageEnabled={true}
+              onMessage={handleWebViewMessage}
+            />
+          </WebViewErrorBoundary>
         )}
       </View>
 
@@ -286,6 +337,21 @@ const styles = StyleSheet.create({
   titulo: { ...Type.cuerpoDestacado, fontSize: 16, color: Colors.texto, fontFamily: Fonts.cuerpoBold },
   visorContainer: { flex: 1, backgroundColor: '#000' },
   webView: { flex: 1 },
+  fallback: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Spacing.m,
+    padding: Spacing.l,
+    backgroundColor: '#000',
+  },
+  fallbackTitulo: {
+    ...Type.cuerpoDestacado,
+    color: '#fff',
+    textAlign: 'center',
+    fontFamily: Fonts.cuerpoBold,
+  },
+  fallbackTexto: { ...Type.nota, color: '#B9C2CC', textAlign: 'center', lineHeight: 20 },
   cargando: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: Spacing.m },
   cargandoTexto: { ...Type.nota, color: Colors.textoSuave },
   panelControl: {
