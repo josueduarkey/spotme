@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Path } from 'react-native-svg';
 import { Boton } from '../components/Boton';
 import { Campo } from '../components/Campo';
 import { Wordmark } from '../components/Wordmark';
@@ -17,6 +18,29 @@ import { Colors, Radius, Spacing, Type } from '../constants/theme';
 import { signIn, signUp, signInWithGoogle } from '../lib/queries/auth';
 
 type Modo = 'login' | 'registro';
+
+function GoogleIcon({ size = 20 }: { size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path
+        fill="#EA4335"
+        d="M12 5.04c1.66 0 3.2.57 4.38 1.69l3.27-3.27C17.67 1.48 14.99.75 12 .75c-4.63 0-8.6 2.67-10.49 6.56l4.1 3.18C6.58 7.37 9.07 5.04 12 5.04z"
+      />
+      <Path
+        fill="#4285F4"
+        d="M23.49 12.27c0-.81-.07-1.6-.2-2.3H12v4.51h6.46c-.29 1.48-1.14 2.73-2.4 3.58l3.73 2.89c2.18-2 3.7-4.99 3.7-8.68z"
+      />
+      <Path
+        fill="#FBBC05"
+        d="M5.61 14.61c-.24-.73-.38-1.5-.38-2.3s.14-1.57.38-2.3L1.51 6.83C.55 8.79 0 10.96 0 13.25s.55 4.46 1.51 6.42l4.1-3.06z"
+      />
+      <Path
+        fill="#34A853"
+        d="M12 23.25c3.24 0 5.97-1.07 7.96-2.91l-3.73-2.89c-1.03.69-2.35 1.1-4.23 1.1-3.24 0-5.99-2.19-6.97-5.13l-4.1 3.17c2.04 4.07 6.27 6.76 11.07 6.76z"
+      />
+    </Svg>
+  );
+}
 
 /** Pantalla 2 — Login / Registro. */
 export default function Auth() {
@@ -137,6 +161,7 @@ export default function Auth() {
               onPress={conectarGoogle}
               cargando={cargandoGoogle}
               variante="secundario"
+              icono={<GoogleIcon size={18} />}
             />
           </View>
         </ScrollView>

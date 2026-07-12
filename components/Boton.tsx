@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { Colors, Peana, Radius, Spacing, Type } from '../constants/theme';
 
 interface Props {
@@ -9,9 +9,10 @@ interface Props {
   cargando?: boolean;
   deshabilitado?: boolean;
   style?: ViewStyle;
+  icono?: React.ReactNode;
 }
 
-export function Boton({ titulo, onPress, variante = 'primario', cargando, deshabilitado, style }: Props) {
+export function Boton({ titulo, onPress, variante = 'primario', cargando, deshabilitado, style, icono }: Props) {
   const esPrimario = variante === 'primario';
   const esFantasma = variante === 'fantasma';
   return (
@@ -30,13 +31,16 @@ export function Boton({ titulo, onPress, variante = 'primario', cargando, deshab
       {cargando ? (
         <ActivityIndicator color={esPrimario ? Colors.superficie : Colors.primario} />
       ) : (
-        <Text
-          style={[
-            styles.texto,
-            { color: esPrimario ? Colors.superficie : esFantasma ? Colors.textoSuave : Colors.primario },
-          ]}>
-          {titulo}
-        </Text>
+        <View style={styles.filaContenido}>
+          {icono}
+          <Text
+            style={[
+              styles.texto,
+              { color: esPrimario ? Colors.superficie : esFantasma ? Colors.textoSuave : Colors.primario },
+            ]}>
+            {titulo}
+          </Text>
+        </View>
       )}
     </Pressable>
   );
@@ -66,4 +70,10 @@ const styles = StyleSheet.create({
   },
   fantasma: { backgroundColor: 'transparent', minHeight: 44 },
   texto: { ...Type.cuerpoDestacado, fontSize: 17 },
+  filaContenido: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.s,
+  },
 });
