@@ -42,16 +42,18 @@ export default function Home() {
             <Text style={styles.ctaNota}>Lugares, negocios y la huella de otros viajeros, capa por capa.</Text>
           </View>
           <ExpoImage
-            source={require('../../assets/dioramas/cerro_verde.png')}
+            source={require('../../assets/diorama-sv.png')}
             style={styles.ctaDiorama}
             contentFit="contain"
           />
         </Pressable>
 
-        <Pressable onPress={() => router.push('/planificar-ruta')} style={({ pressed }) => [styles.ctaRuta, pressed && { opacity: 0.92 }]}>
+        <Pressable onPress={() => router.push('/aventura')} style={({ pressed }) => [styles.ctaRuta, pressed && { opacity: 0.92 }]}>
           <View style={{ flex: 1, gap: 4 }}>
-            <Text style={styles.ctaTitulo}>Planificar tu ruta</Text>
-            <Text style={styles.ctaNotaRuta}>Calcula distancias, presupuestos y descubre joyas en tu camino.</Text>
+            <Text style={styles.ctaTitulo}>Arma tu aventura</Text>
+            <Text style={styles.ctaNotaRuta}>
+              Dinos qué te gusta y cuántos días tienes: te damos el roadmap de tu viaje.
+            </Text>
           </View>
           <View style={styles.iconoViaje}>
             <Navigation size={26} color={Colors.superficie} strokeWidth={2.4} />
@@ -117,7 +119,7 @@ const styles = StyleSheet.create({
   ctaEtiqueta: { ...Type.etiqueta, fontSize: 10, color: Colors.azulLago },
   ctaTitulo: { ...Type.titulo, fontSize: 24, color: Colors.textoInvertido },
   ctaNota: { ...Type.nota, color: Colors.azulLago },
-  ctaDiorama: { width: 116, height: 116 },
+  ctaDiorama: { width: 138, height: 92 },
   ctaNotaRuta: { ...Type.nota, color: Colors.fondo },
   iconoViaje: {
     width: 48,

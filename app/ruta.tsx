@@ -7,23 +7,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Boton } from '../components/Boton';
 import { Colors, Radius, Spacing, Type, Fonts, Peana } from '../constants/theme';
 import { getPlaceById } from '../lib/queries/places';
-import { getOSRMRoute, recommendPlacesAlongRoute, savePlannedRoute } from '../lib/queries/routes';
+import { COSTO_CATEGORIA, getOSRMRoute, recommendPlacesAlongRoute, savePlannedRoute } from '../lib/queries/routes';
 import { Place } from '../constants/mock';
-
-/** Estimación del costo por categoría de lugar. */
-const COSTO_CATEGORIA: Record<string, number> = {
-  naturaleza: 4,
-  cultura: 10,
-  gastronomia: 8,
-  aventura: 15,
-  playa: 6,
-  historia: 10,
-  urbano: 5,
-};
 
 export default function Ruta() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ startId: string; endId: string }>();
+  // stopIds (CSV opcional): paradas intermedias precargadas — lo usa "Mi aventura"
+  const params = useLocalSearchParams<{ startId: string; endId: string; stopIds?: string }>();
 
   const [cargando, setCargando] = useState(true);
   const [origen, setOrigen] = useState<Place | null>(null);
@@ -44,9 +34,15 @@ export default function Ruta() {
         setOrigen(start);
         setDestino(end);
       }
+      // Paradas intermedias precargadas (itinerario de "Mi aventura")
+      if (params.stopIds) {
+        const ids = params.stopIds.split(',').filter(Boolean);
+        const stops = await Promise.all(ids.map((id) => getPlaceById(id)));
+        setParadas(stops.filter((s): s is Place => s !== null));
+      }
     }
     inicializar();
-  }, [params.startId, params.endId]);
+  }, [params.startId, params.endId, params.stopIds]);
 
   // 2. Recalcular la ruta vial de OSRM y actualizar las recomendaciones cada vez que cambien las paradas
   useEffect(() => {
