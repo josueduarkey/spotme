@@ -82,15 +82,14 @@ export interface UploadRecord {
 
 export interface UploadPhotoResult {
   upload: UploadRecord | null;
-  /** Nombre del lugar/negocio al que quedó asociada, para el mensaje de éxito. */
-  targetName: string | null;
+  targetName?: string;
   error: string | null;
 }
 
 /**
  * Sube una foto de un turista a Supabase y la asocia a un lugar o negocio.
  * Si no se pasa targetId/targetType, calcula automáticamente el lugar o negocio
- * más cercano (máximo 15 km) en base a las coordenadas de la foto.
+ * más cercano en base a las coordenadas de la foto (UGC automático).
  */
 export async function uploadPhoto(
   photoUri: string,
@@ -113,7 +112,7 @@ export async function uploadPhoto(
         lng,
         created_at: new Date().toISOString(),
       },
-      targetName: 'Divino Salvador del Mundo',
+      targetName: targetId ? undefined : 'Divino Salvador del Mundo',
       error: null,
     };
   }
@@ -125,29 +124,48 @@ export async function uploadPhoto(
     } = await supabase.auth.getUser();
     if (!user) return { upload: null, targetName: null, error: 'Inicia sesión para subir fotos.' };
 
-    // 1. Resolver el destino ANTES de subir, para no dejar archivos huérfanos
-    //    en Storage si no hay nada cerca que asociar.
+    // 1. Sube la foto al bucket uploads
+    const { url: imageUrl, error: uploadError } = await uploadImage(photoUri, 'photos', user.id);
+    if (uploadError || !imageUrl) {
+      return { upload: null, targetName: null, error: uploadError || 'Error al subir la imagen.' };
+    }
+
     let finalTargetId = targetId;
     let finalTargetType = targetType;
-    let targetName: string | null = null;
+    let closestItemName: string | undefined = undefined;
 
+    // 2. Si no se pasa destino, asociarlo al lugar/negocio más cercano en base a lat/lng
     if (!finalTargetId || !finalTargetType) {
       const [placesRes, businessesRes] = await Promise.all([
         supabase.from('places').select('id, name, lat, lng'),
-        supabase.from('businesses').select('id, name, lat, lng').not('lat', 'is', null),
+        supabase.from('businesses').select('id, name, lat, lng'),
       ]);
 
-      let closest: { id: string; name: string; type: 'place' | 'business'; distance: number } | null = null;
-      for (const p of placesRes.data ?? []) {
-        const d = getDistance(lat, lng, p.lat, p.lng);
-        if (!closest || d < closest.distance) closest = { id: p.id, name: p.name, type: 'place', distance: d };
-      }
-      for (const b of businessesRes.data ?? []) {
-        const d = getDistance(lat, lng, b.lat as number, b.lng as number);
-        if (!closest || d < closest.distance) closest = { id: b.id, name: b.name, type: 'business', distance: d };
+      let closestItem: { id: string; name: string; type: 'place' | 'business'; distance: number } | null = null;
+
+      // Calcular distancia a lugares
+      if (placesRes.data) {
+        for (const p of placesRes.data) {
+          const dist = getDistance(lat, lng, p.lat, p.lng);
+          if (!closestItem || dist < closestItem.distance) {
+            closestItem = { id: p.id, name: p.name, type: 'place', distance: dist };
+          }
+        }
       }
 
-      if (!closest || closest.distance > MAX_ASSOC_KM) {
+      // Calcular distancia a negocios
+      if (businessesRes.data) {
+        for (const b of businessesRes.data) {
+          if (b.lat !== null && b.lng !== null) {
+            const dist = getDistance(lat, lng, b.lat as number, b.lng as number);
+            if (!closestItem || dist < closestItem.distance) {
+              closestItem = { id: b.id, name: b.name, type: 'business', distance: dist };
+            }
+          }
+        }
+      }
+
+      if (!closestItem || closestItem.distance > MAX_ASSOC_KM) {
         return {
           upload: null,
           targetName: null,
@@ -155,18 +173,13 @@ export async function uploadPhoto(
             'No hay ningún lugar del mapa cerca de esta foto. Si descubriste un rincón nuevo, ¡créalo con el botón “+” del mapa!',
         };
       }
-      finalTargetId = closest.id;
-      finalTargetType = closest.type;
-      targetName = closest.name;
+
+      finalTargetId = closestItem.id;
+      finalTargetType = closestItem.type;
+      closestItemName = closestItem.name;
     }
 
-    // 2. Subir la imagen al bucket `uploads`
-    const { url: imageUrl, error: uploadError } = await uploadImage(photoUri, 'photos', user.id);
-    if (uploadError || !imageUrl) {
-      return { upload: null, targetName: null, error: uploadError || 'Error al subir la imagen.' };
-    }
-
-    // 3. Registrar el upload (alimenta la ficha y la capa de actividad del twin)
+    // 3. Registrar el upload en la base de datos
     const { data: row, error: insertError } = await supabase
       .from('uploads')
       .insert({
@@ -181,7 +194,8 @@ export async function uploadPhoto(
       .single();
 
     if (insertError) return { upload: null, targetName: null, error: insertError.message };
-    return { upload: row as UploadRecord, targetName, error: null };
+
+    return { upload: row as UploadRecord, targetName: closestItemName, error: null };
   } catch (e) {
     return {
       upload: null,
