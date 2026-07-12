@@ -5,7 +5,14 @@
  */
 
 export type AccountType = 'turista' | 'negocio';
-export type Categoria = 'naturaleza' | 'cultura' | 'gastronomia' | 'aventura';
+export type Categoria =
+  | 'naturaleza'
+  | 'cultura'
+  | 'gastronomia'
+  | 'aventura'
+  | 'playa'
+  | 'historia'
+  | 'urbano';
 
 export interface MockProfile {
   id: string;
@@ -73,6 +80,9 @@ export const CATEGORIAS: Record<Categoria, { etiqueta: string }> = {
   cultura: { etiqueta: 'Cultura' },
   gastronomia: { etiqueta: 'Gastronomía' },
   aventura: { etiqueta: 'Aventura' },
+  playa: { etiqueta: 'Playa' },
+  historia: { etiqueta: 'Historia' },
+  urbano: { etiqueta: 'Urbano' },
 };
 
 export const MOCK_PROFILE: MockProfile = {

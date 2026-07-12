@@ -1,9 +1,9 @@
+import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Navigation } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MotivoCapas } from '../../components/MotivoCapas';
 import { TarjetaEvento } from '../../components/TarjetaEvento';
 import { TarjetaLugar } from '../../components/TarjetaLugar';
 import { EventItem, MOCK_PROFILE, MockProfile, Place } from '../../constants/mock';
@@ -37,10 +37,15 @@ export default function Home() {
 
         <Pressable onPress={() => router.push('/mapa')} style={({ pressed }) => [styles.ctaMapa, pressed && { opacity: 0.92 }]}>
           <View style={{ flex: 1, gap: 4 }}>
-            <Text style={styles.ctaTitulo}>Explorar el mapa</Text>
+            <Text style={styles.ctaEtiqueta}>El Salvador en miniatura</Text>
+            <Text style={styles.ctaTitulo}>Ver el mapa</Text>
             <Text style={styles.ctaNota}>Lugares, negocios y la huella de otros viajeros, capa por capa.</Text>
           </View>
-          <MotivoCapas tamano={64} />
+          <ExpoImage
+            source={require('../../assets/dioramas/cerro_verde.png')}
+            style={styles.ctaDiorama}
+            contentFit="contain"
+          />
         </Pressable>
 
         <Pressable onPress={() => router.push('/planificar-ruta')} style={({ pressed }) => [styles.ctaRuta, pressed && { opacity: 0.92 }]}>
@@ -109,8 +114,10 @@ const styles = StyleSheet.create({
     padding: Spacing.l,
     marginTop: -Spacing.s,
   },
-  ctaTitulo: { ...Type.subtitulo, color: Colors.textoInvertido },
+  ctaEtiqueta: { ...Type.etiqueta, fontSize: 10, color: Colors.azulLago },
+  ctaTitulo: { ...Type.titulo, fontSize: 24, color: Colors.textoInvertido },
   ctaNota: { ...Type.nota, color: Colors.azulLago },
+  ctaDiorama: { width: 116, height: 116 },
   ctaNotaRuta: { ...Type.nota, color: Colors.fondo },
   iconoViaje: {
     width: 48,

@@ -16,6 +16,9 @@ const COSTO_CATEGORIA: Record<string, number> = {
   cultura: 10,
   gastronomia: 8,
   aventura: 15,
+  playa: 6,
+  historia: 10,
+  urbano: 5,
 };
 
 export default function Ruta() {

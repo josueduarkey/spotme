@@ -2,10 +2,11 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { ArrowLeft, BadgeCheck, Clock, MapPin, Phone, Sparkles } from 'lucide-react-native';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Boton } from '../../components/Boton';
 import { ICONO_CATEGORIA, IconoNegocio } from '../../components/iconos';
+import { getFotoLugar } from '../../constants/fotosLugares';
 import { Business, CATEGORIAS, esComunidad, Place } from '../../constants/mock';
 import { Colors, Peana, Radius, Spacing, Type } from '../../constants/theme';
 import { getBusinessById } from '../../lib/queries/businesses';
@@ -47,11 +48,18 @@ export default function Ficha() {
     ? (item as Business).category
     : CATEGORIAS[(item as Place).category].etiqueta;
   const subtitulo = esNegocio ? (item as Business).address : `Departamento de ${(item as Place).department}`;
+  // Portada: cover de Supabase → foto local curada (Top 5) → ícono de categoría.
   const portadaUrl = !esNegocio ? (item as Place).coverImageUrl : null;
+  const fotoLocal = !esNegocio ? getFotoLugar(item.name) : null;
+  const fuentePortada = portadaUrl ? { uri: portadaUrl } : fotoLocal;
 
   function comoLlegar() {
-    // Deep link universal a Google Maps con las coordenadas del destino
-    Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${item!.lat},${item!.lng}`);
+    // La ruta se traza dentro de la app (OSRM); Google Maps queda como
+    // opción secundaria dentro de esa pantalla.
+    router.push({
+      pathname: '/como-llegar',
+      params: { lat: String(item!.lat), lng: String(item!.lng), nombre: item!.name },
+    });
   }
 
   function subirFoto() {
@@ -86,8 +94,8 @@ export default function Ficha() {
   return (
     <View style={styles.pantalla}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: Spacing.xl }}>
-        {portadaUrl ? (
-          <Image source={{ uri: portadaUrl }} style={styles.portadaFoto} contentFit="cover" />
+        {fuentePortada ? (
+          <Image source={fuentePortada} style={styles.portadaFoto} contentFit="cover" />
         ) : (
           <View style={styles.portada}>
             <IconoPortada size={72} color={Colors.primario} strokeWidth={1.5} />

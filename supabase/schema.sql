@@ -32,7 +32,7 @@ create table if not exists public.places (
   description text,
   lat double precision not null,
   lng double precision not null,
-  category text check (category in ('naturaleza', 'cultura', 'gastronomia', 'aventura')),
+  category text check (category in ('naturaleza', 'cultura', 'gastronomia', 'aventura', 'playa', 'historia', 'urbano')),
   cover_image_url text,
   map_icon_url text,
   is_generated_image boolean not null default false,
@@ -53,6 +53,11 @@ alter table public.places add constraint places_source_check check (source in ('
 -- Los seeds (sin created_by) son la capa oficial verificada.
 update public.places set source = 'official', is_verified = true
   where created_by is null and source = 'community';
+
+-- Migración categorías ampliadas (idempotente): playa, historia, urbano
+alter table public.places drop constraint if exists places_category_check;
+alter table public.places add constraint places_category_check
+  check (category in ('naturaleza', 'cultura', 'gastronomia', 'aventura', 'playa', 'historia', 'urbano'));
 
 -- confirmaciones comunitarias de lugares (un usuario no confirma 2 veces el mismo lugar)
 create table if not exists public.place_verifications (

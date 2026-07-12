@@ -70,6 +70,13 @@ Hackathon de Turismo Creativo Vol. 1 — PoC construido en 2 días con dos cuent
 - **Decisión de stack**: se descartó @rnmapbox/maps a propósito (evita rebuild nativo y no perder Expo Go en iPhone); el twin usa react-native-maps + Cesium. El 3D depende de la Map Tiles API habilitada en la key de Google.
 - ⏳ Pendiente Cuenta A: montar barra de búsqueda (`searchPlaces`) en mapa/crear-lugar; acceso a insights también desde el mapa.
 
+**Mejoras UX + admin (2026-07-12, Cuenta A):**
+
+- **Rol admin por allowlist** (`constants/admins.ts`, hoy: eduardo.garcia@keyinstitute.edu.sv): entrada en el perfil visible solo para esos correos → `app/admin.tsx` con datos por categoría de los lugares (total, oficiales/comunidad, verificados, barras). Es gate de UI (lectura de `places` ya es pública por RLS); si algún día expone datos sensibles, mover a `is_admin` + RLS.
+- **3 categorías nuevas**: `playa`, `historia`, `urbano` (tipo + etiquetas + íconos Waves/ScrollText/Building2 + costos de ruta). ⚠️ **Requiere migración en DB real**: bloque idempotente `places_category_check` ya está en `schema.sql` — correr en el SQL Editor de Supabase, si no `createPlace` con categoría nueva falla el CHECK.
+- **Home**: CTA del mapa rediseñada con diorama (cerro_verde) y título "Ver el mapa"; Top 5 con fotos locales curadas (`constants/fotosLugares.ts` ← assets *.jpg) en cards más anchas (248px). La ficha usa la misma foto local como portada fallback.
+- **"Cómo llegar" vive en la app** (`app/como-llegar.tsx`): OSRM desde la ubicación del usuario al destino con polyline, duración y distancia; Google Maps queda como enlace secundario para giro a giro. La ficha ya no abre Maps directo.
+
 **Fase 6 — pendiente (pulido y demo):** contenido curado, prueba E2E del recorrido completo en dispositivo, guion de demo. Nota: las capas 3D nuevas son JS puro — llegan por Metro sin rebuild del APK.
 
 **🔄 PIVOTE (2026-07-11): la Fase 3 ahora incluye crear lugares desde cero, no solo subir fotos a lugares existentes.** Ver sección 0 para la justificación completa (esto refuerza el digital twin, no lo diluye) y sección 9 para los prompts actualizados de Cuenta A y Cuenta B. Cambios de modelo de datos: `places` ganó `source`, `created_by`, `verification_count`, `is_verified`; nueva tabla `place_verifications`. Cambios de pantallas: nueva pantalla 7b "Crear lugar nuevo"; pantalla 7 (ficha) gana botón "Confirmar que existe" para lugares sin verificar. Usar los prompts de la sección 9, no los de la sección 8 (esos ya están completados).

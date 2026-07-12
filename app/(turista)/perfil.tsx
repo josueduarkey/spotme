@@ -1,10 +1,11 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Award, CheckCircle, Compass, LogOut, MapPin, Camera, User, Trophy, BookOpen, Layers, ChevronRight } from 'lucide-react-native';
+import { Award, CheckCircle, Compass, LogOut, MapPin, Camera, User, Trophy, BookOpen, Layers, ChevronRight, ShieldCheck } from 'lucide-react-native';
 import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Fonts, Peana, Radius, Spacing, Type } from '../../constants/theme';
 import { getTouristStats, getUserChallenges, TouristStats, UserChallengeInfo } from '../../lib/queries/profile';
+import { esAdmin } from '../../constants/admins';
 import { getCurrentProfile, signOut } from '../../lib/queries/auth';
 import { MockProfile, MOCK_PROFILE } from '../../constants/mock';
 
@@ -85,6 +86,20 @@ export default function Perfil() {
           </View>
           <Trophy size={36} color={Colors.amarilloSol} strokeWidth={1.8} />
         </View>
+
+        {/* Panel de administración — visible solo para correos de constants/admins.ts */}
+        {esAdmin(userProfile.email) && (
+          <Pressable onPress={() => router.push('/admin')} style={styles.tarjetaInsight}>
+            <View style={[styles.insightIcono, { backgroundColor: Colors.acento }]}>
+              <ShieldCheck size={20} color={Colors.superficie} strokeWidth={2.2} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.insightTitulo}>Panel de administración</Text>
+              <Text style={styles.insightSubtitulo}>Datos por categoría de los lugares registrados</Text>
+            </View>
+            <ChevronRight size={20} color={Colors.textoSuave} />
+          </Pressable>
+        )}
 
         {/* Acceso al panel de inteligencia territorial (pantalla 17) */}
         <Pressable onPress={() => router.push('/insights')} style={styles.tarjetaInsight}>

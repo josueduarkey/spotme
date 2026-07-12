@@ -3,6 +3,7 @@
  * para que lugares/negocios se vean igual en cards, marcadores y fichas.
  */
 import {
+  Building2,
   Calendar,
   Camera,
   Landmark,
@@ -10,8 +11,10 @@ import {
   LucideIcon,
   Mountain,
   Recycle,
+  ScrollText,
   Store,
   UtensilsCrossed,
+  Waves,
 } from 'lucide-react-native';
 import { Categoria } from '../constants/mock';
 
@@ -20,6 +23,9 @@ export const ICONO_CATEGORIA: Record<Categoria, LucideIcon> = {
   cultura: Landmark,
   gastronomia: UtensilsCrossed,
   aventura: Mountain,
+  playa: Waves,
+  historia: ScrollText,
+  urbano: Building2,
 };
 
 export const IconoNegocio: LucideIcon = Store;
