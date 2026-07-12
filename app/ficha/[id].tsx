@@ -1,7 +1,7 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { ArrowLeft, BadgeCheck, Clock, MapPin, Phone, Sparkles } from 'lucide-react-native';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Boton } from '../../components/Boton';
@@ -10,6 +10,7 @@ import { Business, CATEGORIAS, esComunidad, Place } from '../../constants/mock';
 import { Colors, Peana, Radius, Spacing, Type } from '../../constants/theme';
 import { getBusinessById } from '../../lib/queries/businesses';
 import { confirmPlace, getPlaceById } from '../../lib/queries/places';
+import { getPhotosFor } from '../../lib/queries/uploads';
 
 /** Pantalla 7 — Ficha de lugar o negocio. Param `tipo`: 'lugar' | 'negocio'. */
 export default function Ficha() {
@@ -18,6 +19,7 @@ export default function Ficha() {
   const esNegocio = tipo === 'negocio';
   const [lugar, setLugar] = useState<Place | null>(null);
   const [negocio, setNegocio] = useState<Business | null>(null);
+  const [fotos, setFotos] = useState<string[]>([]);
   const [confirmando, setConfirmando] = useState(false);
   const [yaConfirmo, setYaConfirmo] = useState(false);
 
@@ -25,6 +27,13 @@ export default function Ficha() {
     if (esNegocio) getBusinessById(id).then(setNegocio);
     else getPlaceById(id).then(setLugar);
   }, [id, esNegocio]);
+
+  // La galería se refresca al volver de la pantalla de subir foto.
+  useFocusEffect(
+    useCallback(() => {
+      getPhotosFor(esNegocio ? 'business' : 'place', id).then(setFotos);
+    }, [id, esNegocio]),
+  );
 
   const item = esNegocio ? negocio : lugar;
   if (!item) return <View style={styles.pantalla} />;
@@ -46,7 +55,16 @@ export default function Ficha() {
   }
 
   function subirFoto() {
-    Alert.alert('Muy pronto', 'Subir fotos a lugares existentes se habilita al cerrar la Fase 3.');
+    router.push({
+      pathname: '/subir-foto',
+      params: {
+        id: item!.id,
+        tipo: esNegocio ? 'negocio' : 'lugar',
+        nombre: item!.name,
+        lat: String(item!.lat),
+        lng: String(item!.lng),
+      },
+    });
   }
 
   async function confirmarQueExiste() {
@@ -101,6 +119,17 @@ export default function Ficha() {
             <Text style={styles.subtitulo}>{subtitulo}</Text>
           </View>
           <Text style={styles.descripcion}>{item.description}</Text>
+
+          {fotos.length > 0 && (
+            <View style={{ gap: Spacing.s, marginTop: Spacing.s }}>
+              <Text style={styles.galeriaTitulo}>Fotos de la comunidad</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.s }}>
+                {fotos.map((url) => (
+                  <Image key={url} source={{ uri: url }} style={styles.galeriaFoto} contentFit="cover" />
+                ))}
+              </ScrollView>
+            </View>
+          )}
 
           {esNegocio && (
             <View style={styles.datos}>
@@ -188,6 +217,14 @@ const styles = StyleSheet.create({
   filaSubtitulo: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   subtitulo: { ...Type.nota, color: Colors.textoSuave },
   descripcion: { ...Type.cuerpo, color: Colors.texto, marginTop: Spacing.s },
+  galeriaTitulo: { ...Type.etiqueta, color: Colors.textoSuave },
+  galeriaFoto: {
+    width: 120,
+    height: 120,
+    borderRadius: Radius.s,
+    borderWidth: 1.5,
+    borderColor: Colors.borde,
+  },
   datos: {
     backgroundColor: Colors.superficie,
     borderRadius: Radius.m,
