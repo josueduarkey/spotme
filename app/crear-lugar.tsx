@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { ArrowLeft, Camera, ImageIcon, LocateFixed, MapPin, X } from 'lucide-react-native';
 import React, { useRef, useState } from 'react';
@@ -53,8 +53,25 @@ type Paso = 1 | 2 | 3;
 export default function CrearLugar() {
   const router = useRouter();
   const mapRef = useRef<MapView>(null);
+
+  // Puente de datos: si llegamos con lat/lng (tap en el mapa 2D o en el
+  // gemelo 3D de Cesium), arrancamos con el pin ya sobre esa coordenada.
+  // Sin params, el flujo original: el usuario mueve el mapa sobre El Salvador.
+  const params = useLocalSearchParams<{ lat?: string; lng?: string }>();
+  const coordInicial = React.useMemo(() => {
+    const lat = params.lat ? Number(params.lat) : NaN;
+    const lng = params.lng ? Number(params.lng) : NaN;
+    return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+  }, [params.lat, params.lng]);
+
+  const regionInicial: Region = coordInicial
+    ? { latitude: coordInicial.lat, longitude: coordInicial.lng, latitudeDelta: 0.02, longitudeDelta: 0.02 }
+    : EL_SALVADOR;
+
   const [paso, setPaso] = useState<Paso>(1);
-  const [coordenadas, setCoordenadas] = useState({ lat: EL_SALVADOR.latitude, lng: EL_SALVADOR.longitude });
+  const [coordenadas, setCoordenadas] = useState(
+    coordInicial ?? { lat: EL_SALVADOR.latitude, lng: EL_SALVADOR.longitude },
+  );
   const [buscandoUbicacion, setBuscandoUbicacion] = useState(false);
   const [fotoUri, setFotoUri] = useState<string | null>(null);
   const [nombre, setNombre] = useState('');
@@ -144,7 +161,7 @@ export default function CrearLugar() {
         <MapView
           ref={mapRef}
           style={StyleSheet.absoluteFill}
-          initialRegion={EL_SALVADOR}
+          initialRegion={regionInicial}
           onRegionChangeComplete={(r) => setCoordenadas({ lat: r.latitude, lng: r.longitude })}>
           <UrlTile
             urlTemplate="https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"

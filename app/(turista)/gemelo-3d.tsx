@@ -1,7 +1,7 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Globe, MapPin, Compass } from 'lucide-react-native';
+import { Globe, MapPin, Compass, Landmark, Plus, Crosshair } from 'lucide-react-native';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Carga segura del módulo nativo de WebView. El require con string literal deja
@@ -30,6 +30,15 @@ type Capa3D = 'lugares' | 'negocios' | 'actividad';
 // Recuperar API Key activa
 const GOOGLE_MAPS_API_KEY =
   Constants.expoConfig?.android?.config?.googleMaps?.apiKey || 'AIzaSyBE5rKSq03ZEN8tlGbSaQhOnGgf6IIEoJ4';
+
+// Centro Histórico de San Salvador — el escaparate principal del gemelo 3D.
+// Coordenadas públicas de los hitos; ajustables si el equipo quiere afinarlas.
+const CENTRO_HISTORICO = { lat: 13.6989, lng: -89.1914 };
+const HITOS_CENTRO = [
+  { name: 'Catedral Metropolitana', lat: 13.6994, lng: -89.1912 },
+  { name: 'Palacio Nacional', lat: 13.699, lng: -89.1917 },
+  { name: 'Plaza Libertad', lat: 13.6975, lng: -89.1897 },
+];
 
 /** Aviso cuando el APK instalado no trae el módulo nativo de WebView. */
 function Fallback3D() {
@@ -109,6 +118,16 @@ export default function Gemelo3D() {
     );
   }
 
+  /** Vuela la cámara 3D al Centro Histórico (nuestro escaparate principal). */
+  function irCentroHistorico() {
+    webViewRef.current?.postMessage(JSON.stringify({ type: 'fly_centro' }));
+  }
+
+  /** Pide a Cesium la coordenada real bajo la mira central del globo 3D. */
+  function crearAqui() {
+    webViewRef.current?.postMessage(JSON.stringify({ type: 'request_center_coord' }));
+  }
+
   function handleWebViewMessage(event: any) {
     try {
       const data = JSON.parse(event.nativeEvent.data);
@@ -124,6 +143,20 @@ export default function Gemelo3D() {
           pathname: '/ficha/[id]',
           params: { id: data.id, tipo: 'negocio' },
         });
+      }
+      // Coordenada leída bajo la mira central del gemelo 3D → crear lugar ahí.
+      // El puente de lat/lng lo consume crear-lugar.tsx (useLocalSearchParams).
+      if (data.type === 'center_coord') {
+        router.push({
+          pathname: '/crear-lugar',
+          params: { lat: String(data.lat), lng: String(data.lng) },
+        });
+      }
+      if (data.type === 'center_coord_fail') {
+        Alert.alert(
+          'No se pudo leer la coordenada',
+          'Acerca un poco la cámara al suelo y vuelve a intentar "Crear aquí".',
+        );
       }
     } catch (e) {
       console.warn('WebView Message Error:', e);
@@ -148,6 +181,8 @@ export default function Gemelo3D() {
     const activityJson = JSON.stringify(
       actividad.map((a) => ({ lat: a.lat, lng: a.lng, weight: a.weight })),
     );
+    const hitosJson = JSON.stringify(HITOS_CENTRO);
+    const centroJson = JSON.stringify(CENTRO_HISTORICO);
 
     return `
       <!DOCTYPE html>
@@ -215,20 +250,55 @@ export default function Gemelo3D() {
               if (loader) loader.style.opacity = '0';
             }, 3000);
 
-            // Vista inicial en perspectiva aérea del Divino Salvador del Mundo
-            viewer.camera.setView({
-              destination: Cesium.Cartesian3.fromDegrees(-89.2247, 13.6953, 580),
-              orientation: {
-                heading: Cesium.Math.toRadians(0.0),
-                pitch: Cesium.Math.toRadians(-35.0),
-                roll: 0.0
-              }
-            });
+            // El Centro Histórico es nuestro escaparate: vuelo cinematográfico
+            // en perspectiva oblicua sobre la Plaza Cívica (Catedral + Palacio).
+            const CENTRO = ${centroJson};
+            function volarCentro(animado) {
+              const opts = {
+                destination: Cesium.Cartesian3.fromDegrees(CENTRO.lng, CENTRO.lat - 0.0035, 430),
+                orientation: {
+                  heading: Cesium.Math.toRadians(10.0),
+                  pitch: Cesium.Math.toRadians(-28.0),
+                  roll: 0.0
+                }
+              };
+              if (animado) { opts.duration = 2.5; viewer.camera.flyTo(opts); }
+              else { viewer.camera.setView(opts); }
+            }
+            volarCentro(false);
 
             // ===== Capas del twin: mismas 3 capas cruzadas que el mapa 2D =====
             // Cada entidad se registra en su capa para poder togglearla sin
             // recargar el globo (mensaje 'toggle_layer' desde React Native).
-            const layers = { lugares: [], negocios: [], actividad: [] };
+            const layers = { lugares: [], negocios: [], actividad: [], hitos: [] };
+
+            // Hitos del Centro Histórico (pines dorados, siempre visibles): son
+            // el ancla narrativa del escaparate 3D ante el jurado.
+            const hitos = ${hitosJson};
+            const pinHito = new Cesium.PinBuilder();
+            for (const h of hitos) {
+              const e = viewer.entities.add({
+                id: 'hito-' + h.name,
+                position: Cesium.Cartesian3.fromDegrees(h.lng, h.lat, 700),
+                billboard: {
+                  image: pinHito.fromColor(Cesium.Color.fromCssColorString('#C9A227'), 30).toDataURL(),
+                  verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+                  heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND
+                },
+                label: {
+                  text: h.name,
+                  font: 'bold 12px sans-serif',
+                  fillColor: Cesium.Color.WHITE,
+                  outlineColor: Cesium.Color.fromCssColorString('#7A5C00'),
+                  outlineWidth: 4,
+                  style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+                  verticalOrigin: Cesium.VerticalOrigin.TOP,
+                  pixelOffset: new Cesium.Cartesian2(0, 6),
+                  heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND
+                }
+              });
+              layers.hitos.push(e);
+            }
 
             // Capa de negocios (pines azules)
             const negocios = ${businessesJson};
@@ -324,12 +394,42 @@ export default function Gemelo3D() {
               }
             }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
+            // Lee la coordenada real (con relieve) bajo un píxel del globo 3D.
+            // Prefiere pickPosition contra los 3D Tiles; cae al elipsoide si el
+            // depth-picking no está disponible en este WebView.
+            function coordAtPixel(pixel) {
+              let cart;
+              if (viewer.scene.pickPositionSupported) {
+                cart = viewer.scene.pickPosition(pixel);
+              }
+              if (!Cesium.defined(cart)) {
+                cart = viewer.camera.pickEllipsoid(pixel, viewer.scene.globe.ellipsoid);
+              }
+              if (!Cesium.defined(cart)) return null;
+              const c = Cesium.Cartographic.fromCartesian(cart);
+              return {
+                lat: Cesium.Math.toDegrees(c.latitude),
+                lng: Cesium.Math.toDegrees(c.longitude)
+              };
+            }
+
             // Handler para mensajes del contenedor móvil (React Native)
             window.addEventListener('message', (event) => {
               try {
                 const data = JSON.parse(event.data);
                 if (data.type === 'toggle_layer' && layers[data.layer]) {
                   for (const e of layers[data.layer]) e.show = !!data.visible;
+                }
+                if (data.type === 'fly_centro') {
+                  volarCentro(true);
+                }
+                if (data.type === 'request_center_coord') {
+                  const canvas = viewer.scene.canvas;
+                  const px = new Cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2);
+                  const c = coordAtPixel(px);
+                  window.ReactNativeWebView.postMessage(JSON.stringify(
+                    c ? { type: 'center_coord', lat: c.lat, lng: c.lng } : { type: 'center_coord_fail' }
+                  ));
                 }
                 if (data.type === 'fly_to') {
                   // Volar al destino en 3D
@@ -414,6 +514,25 @@ export default function Gemelo3D() {
             />
           </WebViewErrorBoundary>
         )}
+
+        {/* Mira central + controles: apunta el globo a un punto y crea ahí */}
+        {!cargando && WebView && (
+          <>
+            <View pointerEvents="none" style={styles.miraWrap}>
+              <Crosshair size={36} color={Colors.superficie} strokeWidth={2.4} />
+            </View>
+            <View style={styles.controles3d}>
+              <Pressable onPress={irCentroHistorico} style={styles.btnControl}>
+                <Landmark size={16} color={Colors.primario} strokeWidth={2.4} />
+                <Text style={styles.btnControlTexto}>Centro Histórico</Text>
+              </Pressable>
+              <Pressable onPress={crearAqui} style={[styles.btnControl, styles.btnCrear]}>
+                <Plus size={16} color={Colors.superficie} strokeWidth={2.8} />
+                <Text style={[styles.btnControlTexto, { color: Colors.superficie }]}>Crear aquí</Text>
+              </Pressable>
+            </View>
+          </>
+        )}
       </View>
 
       {/* Lista de Lugares Rápida abajo */}
@@ -458,6 +577,47 @@ const styles = StyleSheet.create({
   titulo: { ...Type.cuerpoDestacado, fontSize: 16, color: Colors.texto, fontFamily: Fonts.cuerpoBold },
   visorContainer: { flex: 1, backgroundColor: '#000' },
   webView: { flex: 1 },
+  miraWrap: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    opacity: 0.85,
+  },
+  controles3d: {
+    position: 'absolute',
+    right: Spacing.m,
+    bottom: Spacing.m,
+    gap: Spacing.s,
+    alignItems: 'flex-end',
+  },
+  btnControl: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.superficie,
+    paddingHorizontal: Spacing.m,
+    paddingVertical: 10,
+    borderRadius: Radius.m,
+    borderWidth: 1.5,
+    borderColor: Colors.borde,
+    borderBottomWidth: Peana.grosor,
+    borderBottomColor: Colors.bordeOscuro,
+  },
+  btnCrear: {
+    backgroundColor: Colors.primario,
+    borderColor: Colors.primario,
+    borderBottomColor: Colors.bordeOscuro,
+  },
+  btnControlTexto: {
+    ...Type.cuerpoDestacado,
+    fontSize: 13,
+    color: Colors.texto,
+    fontFamily: Fonts.cuerpoBold,
+  },
   capas3d: {
     flexDirection: 'row',
     gap: Spacing.s,
