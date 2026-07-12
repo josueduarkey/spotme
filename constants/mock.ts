@@ -64,6 +64,12 @@ export interface EventItem {
   date: string; // ISO
   lat: number;
   lng: number;
+  /** Pivote Fase 6: eventos creados por la comunidad (mismo modelo que places). */
+  source?: 'official' | 'community';
+  createdBy?: string | null;
+  verificationCount?: number;
+  isVerified?: boolean;
+  coverImageUrl?: string | null;
 }
 
 /** Punto de actividad: foto subida por un turista (capa de heatmap). */
@@ -341,6 +347,26 @@ export const MOCK_EVENTS: EventItem[] = [
     date: '2026-07-31T18:00:00Z',
     lat: 13.6989,
     lng: -89.1914,
+  },
+  {
+    id: 'e5',
+    title: 'Fiestas Agostinas',
+    description:
+      'La fiesta más grande del país en honor al Divino Salvador del Mundo: desfiles, ruedas, conciertos y la tradicional Bajada.',
+    department: 'San Salvador',
+    date: '2026-08-01T10:00:00Z',
+    lat: 13.7013,
+    lng: -89.2247,
+  },
+  {
+    id: 'e6',
+    title: 'Bolas de Fuego de Nejapa',
+    description:
+      'Tradición única en el mundo: dos bandos se lanzan bolas de fuego en las calles de Nejapa, en memoria de la erupción de El Playón.',
+    department: 'San Salvador',
+    date: '2026-08-31T19:00:00Z',
+    lat: 13.8153,
+    lng: -89.2311,
   },
 ];
 

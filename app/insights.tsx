@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ArrowLeft, TrendingUp, Camera, MapPin, Store, Lightbulb } from 'lucide-react-native';
+import { ArrowLeft, TrendingUp, Camera, MapPin, Store, Lightbulb, Map as MapIcon, Users, Moon } from 'lucide-react-native';
 import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -35,6 +35,32 @@ export default function Insights() {
   // Normalizador de barras: proporcional al departamento con más actividad.
   const maxPhotos = Math.max(1, ...(data?.stats ?? []).map((s) => s.photos));
 
+  // Insights clave en lenguaje plano, derivados de las mismas stats vivas.
+  const stats = data?.stats ?? [];
+  const totalComunidad = stats.reduce((s, d) => s + d.communityPlaces, 0);
+  const totalLugares = stats.reduce((s, d) => s + d.communityPlaces + d.officialPlaces, 0);
+  const deptosConActividad = stats.filter((d) => d.photos > 0).length;
+  const deptosDormidos = stats.filter((d) => d.photos === 0 && d.communityPlaces + d.officialPlaces > 0).length;
+  const pctComunidad = totalLugares > 0 ? Math.round((totalComunidad / totalLugares) * 100) : 0;
+
+  const insightsClave = [
+    {
+      Icono: MapIcon,
+      titulo: `${deptosConActividad} de 14 departamentos con turistas activos`,
+      detalle: 'Departamentos donde ya se subieron fotos: ahí está pasando el turismo hoy.',
+    },
+    {
+      Icono: Users,
+      titulo: `${totalComunidad} lugares nacieron de la comunidad (${pctComunidad}% del mapa)`,
+      detalle: 'Destinos que el catálogo oficial no tenía y los propios turistas agregaron.',
+    },
+    {
+      Icono: Moon,
+      titulo: `${deptosDormidos} departamentos con lugares pero sin fotos aún`,
+      detalle: 'Hay qué visitar, pero nadie lo está documentando: turismo potencial dormido.',
+    },
+  ];
+
   return (
     <SafeAreaView style={styles.pantalla} edges={['top']}>
       <View style={styles.encabezado}>
@@ -69,12 +95,33 @@ export default function Insights() {
             <Text style={styles.actividadFrase}>{data.activitySentence}</Text>
           </View>
 
+          {/* Insights clave en lenguaje plano */}
+          <Text style={styles.seccionTitulo}>Insights clave</Text>
+          <View style={{ gap: Spacing.s }}>
+            {insightsClave.map((ins) => (
+              <View key={ins.titulo} style={styles.tarjetaClave}>
+                <View style={styles.claveIcono}>
+                  <ins.Icono size={18} color={Colors.primario} strokeWidth={2.2} />
+                </View>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={styles.claveTitulo}>{ins.titulo}</Text>
+                  <Text style={styles.claveDetalle}>{ins.detalle}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+
           {/* Cruce de capas por departamento */}
-          <Text style={styles.seccionTitulo}>Actividad vs. oferta por departamento</Text>
+          <Text style={styles.seccionTitulo}>Detalle por departamento</Text>
+          <Text style={styles.explicacionBarras}>
+            La barra mide la demanda: cuántas fotos han subido los turistas ahí (más larga = más
+            visitas reales). Abajo de cada barra: fotos, lugares creados por la comunidad y negocios
+            registrados. Si hay demanda y pocos negocios, aparece la etiqueta "Oportunidad".
+          </Text>
           <View style={styles.leyenda}>
             <View style={styles.leyendaItem}>
               <Camera size={12} color={Colors.primario} />
-              <Text style={styles.leyendaTexto}>Fotos</Text>
+              <Text style={styles.leyendaTexto}>Fotos de turistas</Text>
             </View>
             <View style={styles.leyendaItem}>
               <MapPin size={12} color={Colors.acento} />
@@ -202,6 +249,35 @@ const styles = StyleSheet.create({
     color: Colors.texto,
     fontFamily: Fonts.display,
     marginTop: Spacing.s,
+  },
+  tarjetaClave: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.m,
+    backgroundColor: Colors.superficie,
+    borderRadius: Radius.m,
+    borderWidth: 1.5,
+    borderColor: Colors.borde,
+    borderBottomWidth: Peana.grosor,
+    borderBottomColor: Colors.bordeOscuro,
+    padding: Spacing.m,
+  },
+  claveIcono: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.s,
+    backgroundColor: Colors.rellenoSuave,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  claveTitulo: { ...Type.cuerpoDestacado, fontSize: 14, color: Colors.texto, fontFamily: Fonts.cuerpoBold },
+  claveDetalle: { ...Type.nota, fontSize: 12, color: Colors.textoSuave, lineHeight: 16 },
+  explicacionBarras: {
+    ...Type.nota,
+    fontSize: 12,
+    color: Colors.textoSuave,
+    lineHeight: 17,
+    marginTop: -Spacing.s,
   },
   leyenda: { flexDirection: 'row', gap: Spacing.m, marginTop: -Spacing.s },
   leyendaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },

@@ -50,6 +50,15 @@ const HITOS_CENTRO = [
   { name: 'Plaza Libertad', lat: 13.6975, lng: -89.1897 },
 ];
 
+// Destinos destacados fijos al inicio de "Volar a un Destino" — los íconos
+// del país que mejor lucen en 3D fotorrealista. El Centro Histórico usa su
+// vuelo cinematográfico propio (fly_centro); los demás, fly_to normal.
+const DESTINOS_DESTACADOS = [
+  { name: 'Centro Histórico', lat: CENTRO_HISTORICO.lat, lng: CENTRO_HISTORICO.lng, esCentro: true },
+  { name: 'Playa El Tunco', lat: 13.4933, lng: -89.3805, esCentro: false },
+  { name: 'Divino Salvador del Mundo', lat: 13.7013, lng: -89.2247, esCentro: false },
+];
+
 /** Aviso cuando el APK instalado no trae el módulo nativo de WebView. */
 function Fallback3D() {
   return (
@@ -523,15 +532,6 @@ export default function Gemelo3D() {
 
   return (
     <SafeAreaView style={styles.pantalla} edges={['top']}>
-      {/* Encabezado */}
-      <View style={styles.encabezado}>
-        <Globe size={20} color={Colors.primario} strokeWidth={2.4} />
-        <View>
-          <Text style={styles.etiqueta}>Digital Twin Real</Text>
-          <Text style={styles.titulo}>El Salvador en 3D Fotorrealista</Text>
-        </View>
-      </View>
-
       {/* Buscador — vuela la cámara 3D al lugar encontrado (Google/Nominatim) */}
       <View style={styles.buscador}>
         <Search size={16} color={Colors.textoSuave} strokeWidth={2.2} />
@@ -621,10 +621,6 @@ export default function Gemelo3D() {
               <Crosshair size={36} color={Colors.superficie} strokeWidth={2.4} />
             </View>
             <View style={styles.controles3d}>
-              <Pressable onPress={irCentroHistorico} style={styles.btnControl}>
-                <Landmark size={16} color={Colors.primario} strokeWidth={2.4} />
-                <Text style={styles.btnControlTexto}>Centro Histórico</Text>
-              </Pressable>
               <Pressable onPress={crearAqui} style={[styles.btnControl, styles.btnCrear]}>
                 <Plus size={16} color={Colors.superficie} strokeWidth={2.8} />
                 <Text style={[styles.btnControlTexto, { color: Colors.superficie }]}>Crear aquí</Text>
@@ -642,6 +638,25 @@ export default function Gemelo3D() {
             <Text style={styles.panelTitulo}>Volar a un Destino</Text>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.listaLugares}>
+            {DESTINOS_DESTACADOS.map((d) => (
+              <Pressable
+                key={`destacado-${d.name}`}
+                onPress={() =>
+                  d.esCentro
+                    ? irCentroHistorico()
+                    : webViewRef.current?.postMessage(JSON.stringify({ type: 'fly_to', lat: d.lat, lng: d.lng }))
+                }
+                style={({ pressed }) => [
+                  styles.tarjetaLugar,
+                  styles.tarjetaDestacada,
+                  pressed && { transform: [{ scale: 0.96 }] },
+                ]}>
+                <Landmark size={12} color={Colors.amarilloSol} strokeWidth={2.4} />
+                <Text style={styles.tarjetaLugarTexto} numberOfLines={1}>
+                  {d.name}
+                </Text>
+              </Pressable>
+            ))}
             {lugares.map((l) => (
               <Pressable
                 key={l.id}
@@ -662,18 +677,6 @@ export default function Gemelo3D() {
 
 const styles = StyleSheet.create({
   pantalla: { flex: 1, backgroundColor: Colors.fondo },
-  encabezado: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.s,
-    paddingHorizontal: Spacing.l,
-    paddingVertical: Spacing.m,
-    borderBottomWidth: 1.5,
-    borderBottomColor: Colors.borde,
-    backgroundColor: Colors.superficie,
-  },
-  etiqueta: { ...Type.etiqueta, fontSize: 10, color: Colors.acento },
-  titulo: { ...Type.cuerpoDestacado, fontSize: 16, color: Colors.texto, fontFamily: Fonts.cuerpoBold },
   visorContainer: { flex: 1, backgroundColor: '#000' },
   webView: { flex: 1 },
   miraWrap: {
@@ -801,5 +804,9 @@ const styles = StyleSheet.create({
     ...Type.cuerpoDestacado,
     fontSize: 13,
     color: Colors.texto,
+  },
+  tarjetaDestacada: {
+    backgroundColor: Colors.superficie,
+    borderColor: Colors.amarilloSol,
   },
 });

@@ -27,11 +27,12 @@ function contentTypeFromUri(uri: string): { ext: string; mime: string } {
 /**
  * Sube una imagen local (URI de expo-image-picker) al bucket `uploads` y
  * devuelve su URL pública. `folder` separa usos: 'places' (portadas de
- * lugares nuevos), 'photos' (fotos UGC de la pantalla 8).
+ * lugares nuevos), 'photos' (fotos UGC de la pantalla 8), 'events'
+ * (portadas de eventos de comunidad), 'avatars' (foto de perfil).
  */
 export async function uploadImage(
   localUri: string,
-  folder: 'places' | 'photos',
+  folder: 'places' | 'photos' | 'events' | 'avatars',
   userId: string
 ): Promise<{ url: string | null; error: string | null }> {
   try {

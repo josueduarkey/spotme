@@ -526,7 +526,13 @@ insert into public.events (title, description, department, date, lat, lng) value
    'Cuscatlán', '2026-07-25T09:00:00Z', 13.9380, -89.0280),
   ('Noche de Museos',
    'Museos y galerías del centro histórico de San Salvador abren gratis hasta medianoche.',
-   'San Salvador', '2026-07-31T18:00:00Z', 13.6989, -89.1914)
+   'San Salvador', '2026-07-31T18:00:00Z', 13.6989, -89.1914),
+  ('Fiestas Agostinas',
+   'La fiesta más grande del país en honor al Divino Salvador del Mundo: desfiles, ruedas, conciertos y la tradicional Bajada.',
+   'San Salvador', '2026-08-01T10:00:00Z', 13.7013, -89.2247),
+  ('Bolas de Fuego de Nejapa',
+   'Tradición única en el mundo: dos bandos se lanzan bolas de fuego en las calles de Nejapa, en memoria de la erupción de El Playón.',
+   'San Salvador', '2026-08-31T19:00:00Z', 13.8153, -89.2311)
 on conflict (title) do nothing;
 
 -- =============== SEED: retos ===============
@@ -716,3 +722,132 @@ set points =
               from public.user_challenges uc
               join public.challenges c on c.id = uc.challenge_id
               where uc.user_id = pr.id and uc.status = 'completed'), 0);
+
+-- =============== FASE 6: eventos comunitarios, ratings y comentarios ===============
+-- La comunidad ya crea lugares; ahora también EVENTOS, con el mismo modelo de
+-- confianza (3 confirmaciones → verificado). Además: rating 1-5 al confirmar
+-- un lugar, y comentarios planos (sin respuestas) con reacción de corazón.
+
+-- --- Eventos de comunidad (espejo del pivote de places) ---
+alter table public.events add column if not exists source text
+  check (source in ('official','community')) default 'official';
+alter table public.events add column if not exists created_by uuid references public.profiles (id);
+alter table public.events add column if not exists verification_count int not null default 0;
+alter table public.events add column if not exists is_verified boolean not null default false;
+
+-- Seeds existentes = capa oficial verificada
+update public.events set is_verified = true, source = 'official' where created_by is null;
+
+create table if not exists public.event_verifications (
+  id uuid primary key default gen_random_uuid(),
+  event_id uuid not null references public.events (id) on delete cascade,
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (event_id, user_id)
+);
+
+create or replace function public.handle_event_verification()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_count int;
+begin
+  select count(*) into v_count
+    from public.event_verifications
+    where event_id = new.event_id;
+
+  update public.events
+    set verification_count = v_count,
+        is_verified = (v_count >= 3)
+    where id = new.event_id;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_event_verification on public.event_verifications;
+create trigger on_event_verification
+  after insert on public.event_verifications
+  for each row execute function public.handle_event_verification();
+
+-- Cualquier autenticado crea eventos de comunidad a su nombre (no 'official')
+drop policy if exists "events_insert_community" on public.events;
+create policy "events_insert_community" on public.events
+  for insert to authenticated
+  with check (source = 'community' and (select auth.uid()) = created_by);
+
+alter table public.event_verifications enable row level security;
+
+drop policy if exists "event_verifications_select_all" on public.event_verifications;
+create policy "event_verifications_select_all" on public.event_verifications
+  for select using (true);
+
+-- Confirmar: a nombre propio y nunca el evento que uno mismo creó
+drop policy if exists "event_verifications_insert_own" on public.event_verifications;
+create policy "event_verifications_insert_own" on public.event_verifications
+  for insert to authenticated
+  with check (
+    (select auth.uid()) = user_id
+    and not exists (
+      select 1 from public.events e
+      where e.id = event_id and e.created_by = (select auth.uid())
+    )
+  );
+
+-- --- Rating 1-5 opcional al confirmar que un lugar existe ---
+alter table public.place_verifications add column if not exists rating int
+  check (rating between 1 and 5);
+
+-- --- Comentarios planos (sin respuestas) con reacción de corazón ---
+create table if not exists public.comments (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  target_type text not null check (target_type in ('place', 'business', 'event')),
+  target_id uuid not null,
+  content text not null check (char_length(content) between 1 and 500),
+  created_at timestamptz not null default now()
+);
+create index if not exists comments_target_idx on public.comments (target_type, target_id, created_at desc);
+
+create table if not exists public.comment_reactions (
+  id uuid primary key default gen_random_uuid(),
+  comment_id uuid not null references public.comments (id) on delete cascade,
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (comment_id, user_id)
+);
+
+alter table public.comments enable row level security;
+alter table public.comment_reactions enable row level security;
+
+drop policy if exists "comments_select_all" on public.comments;
+create policy "comments_select_all" on public.comments
+  for select using (true);
+
+drop policy if exists "comments_insert_own" on public.comments;
+create policy "comments_insert_own" on public.comments
+  for insert to authenticated
+  with check ((select auth.uid()) = user_id);
+
+drop policy if exists "comments_delete_own" on public.comments;
+create policy "comments_delete_own" on public.comments
+  for delete to authenticated
+  using ((select auth.uid()) = user_id);
+
+drop policy if exists "comment_reactions_select_all" on public.comment_reactions;
+create policy "comment_reactions_select_all" on public.comment_reactions
+  for select using (true);
+
+drop policy if exists "comment_reactions_insert_own" on public.comment_reactions;
+create policy "comment_reactions_insert_own" on public.comment_reactions
+  for insert to authenticated
+  with check ((select auth.uid()) = user_id);
+
+-- Quitar la reacción propia (toggle del corazón)
+drop policy if exists "comment_reactions_delete_own" on public.comment_reactions;
+create policy "comment_reactions_delete_own" on public.comment_reactions
+  for delete to authenticated
+  using ((select auth.uid()) = user_id);

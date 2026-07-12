@@ -152,7 +152,15 @@ export async function createPlace(input: NewPlaceInput): Promise<{ place: Place 
   return { place: toPlace(data as PlaceRow), error: null };
 }
 
-export async function confirmPlace(placeId: string): Promise<{ verificationCount: number; isVerified: boolean; error: string | null }> {
+/**
+ * Confirma que el lugar existe; opcionalmente con calificación 1-5 estrellas
+ * (columna `rating` en place_verifications — el promedio sale de ahí, una
+ * sola opinión por usuario garantizada por el unique).
+ */
+export async function confirmPlace(
+  placeId: string,
+  rating?: number,
+): Promise<{ verificationCount: number; isVerified: boolean; error: string | null }> {
   if (!isSupabaseConfigured) {
     // MOCK: muta el lugar en memoria.
     await new Promise((r) => setTimeout(r, 400));
@@ -169,7 +177,9 @@ export async function confirmPlace(placeId: string): Promise<{ verificationCount
   } = await supabase.auth.getUser();
   if (!user) return { verificationCount: 0, isVerified: false, error: 'Inicia sesión para confirmar lugares.' };
 
-  const { error } = await supabase.from('place_verifications').insert({ place_id: placeId, user_id: user.id });
+  const { error } = await supabase
+    .from('place_verifications')
+    .insert({ place_id: placeId, user_id: user.id, ...(rating ? { rating } : {}) });
   if (error) {
     let msg = error.message;
     if (error.code === '23505') msg = 'Ya confirmaste este lugar.';
@@ -189,6 +199,22 @@ export async function confirmPlace(placeId: string): Promise<{ verificationCount
     isVerified: data?.is_verified ?? false,
     error: null,
   };
+}
+
+/** Promedio de calificación del lugar (estrellas dadas al confirmarlo). */
+export async function getPlaceRating(placeId: string): Promise<{ average: number; count: number }> {
+  if (!isSupabaseConfigured) return { average: 4.5, count: 2 };
+
+  const { data, error } = await getSupabase()
+    .from('place_verifications')
+    .select('rating')
+    .eq('place_id', placeId)
+    .not('rating', 'is', null);
+  if (error || !data || data.length === 0) return { average: 0, count: 0 };
+
+  const ratings = (data as { rating: number }[]).map((r) => r.rating);
+  const average = ratings.reduce((s, r) => s + r, 0) / ratings.length;
+  return { average: Math.round(average * 10) / 10, count: ratings.length };
 }
 
 /** Top N para el Home, ordenado por actividad real (cantidad de fotos subidas). */

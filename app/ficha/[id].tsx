@@ -1,10 +1,11 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
-import { ArrowLeft, BadgeCheck, Clock, ExternalLink, MapPin, Phone, Sparkles } from 'lucide-react-native';
+import { ArrowLeft, BadgeCheck, Clock, ExternalLink, MapPin, Phone, Sparkles, Star } from 'lucide-react-native';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Boton } from '../../components/Boton';
+import { Comentarios } from '../../components/Comentarios';
 import { ICONO_CATEGORIA, IconoNegocio } from '../../components/iconos';
 import { IconoTikTok } from '../../components/IconoTikTok';
 import { VisorFotos } from '../../components/VisorFotos';
@@ -12,8 +13,9 @@ import { getFotoLugar, getFotosLugar } from '../../constants/fotosLugares';
 import { Business, CATEGORIAS, esComunidad, Place } from '../../constants/mock';
 import { Colors, Fonts, Peana, Radius, Spacing, Type } from '../../constants/theme';
 import { getBusinessById } from '../../lib/queries/businesses';
-import { confirmPlace, getPlaceById } from '../../lib/queries/places';
+import { confirmPlace, getPlaceById, getPlaceRating } from '../../lib/queries/places';
 import { getPhotosFor } from '../../lib/queries/uploads';
+import { buscarEnTikTok } from '../../lib/tiktok';
 
 /** Pantalla 7 — Ficha de lugar o negocio. Param `tipo`: 'lugar' | 'negocio'. */
 export default function Ficha() {
@@ -26,10 +28,16 @@ export default function Ficha() {
   const [confirmando, setConfirmando] = useState(false);
   const [yaConfirmo, setYaConfirmo] = useState(false);
   const [fotoAbierta, setFotoAbierta] = useState<number | null>(null);
+  const [estrellas, setEstrellas] = useState(0);
+  const [rating, setRating] = useState<{ average: number; count: number }>({ average: 0, count: 0 });
 
   useEffect(() => {
-    if (esNegocio) getBusinessById(id).then(setNegocio);
-    else getPlaceById(id).then(setLugar);
+    if (esNegocio) {
+      getBusinessById(id).then(setNegocio);
+    } else {
+      getPlaceById(id).then(setLugar);
+      getPlaceRating(id).then(setRating);
+    }
   }, [id, esNegocio]);
 
   // La galería se refresca al volver de la pantalla de subir foto.
@@ -69,10 +77,7 @@ export default function Ficha() {
   const offsetComunidad = offsetCuradas + fotosCuradas.length;
 
   function verEnTikTok() {
-    const query = encodeURIComponent(`${item!.name} El Salvador`);
-    Linking.openURL(`https://www.tiktok.com/search?q=${query}`).catch(() =>
-      Alert.alert('No se pudo abrir TikTok', 'Intenta de nuevo más tarde.'),
-    );
+    buscarEnTikTok(item!.name);
   }
 
   function comoLlegar() {
@@ -100,7 +105,7 @@ export default function Ficha() {
   async function confirmarQueExiste() {
     if (!lugar) return;
     setConfirmando(true);
-    const res = await confirmPlace(lugar.id);
+    const res = await confirmPlace(lugar.id, estrellas || undefined);
     setConfirmando(false);
     if (res.error) {
       Alert.alert('No se pudo confirmar', res.error);
@@ -108,6 +113,7 @@ export default function Ficha() {
     }
     setYaConfirmo(true);
     setLugar({ ...lugar, verificationCount: res.verificationCount, isVerified: res.isVerified });
+    getPlaceRating(lugar.id).then(setRating);
     if (res.isVerified) {
       Alert.alert('¡Lugar verificado!', 'Con tu confirmación, la comunidad validó que este lugar existe.');
     }
@@ -149,6 +155,14 @@ export default function Ficha() {
           <View style={styles.filaSubtitulo}>
             <MapPin size={14} color={Colors.textoSuave} />
             <Text style={styles.subtitulo}>{subtitulo}</Text>
+            {!esNegocio && rating.count > 0 && (
+              <View style={styles.filaRating}>
+                <Star size={13} color={Colors.amarilloSol} fill={Colors.amarilloSol} strokeWidth={2} />
+                <Text style={styles.ratingTexto}>
+                  {rating.average} ({rating.count})
+                </Text>
+              </View>
+            )}
           </View>
           <Text style={styles.descripcion}>{item.description}</Text>
 
@@ -189,6 +203,23 @@ export default function Ficha() {
               <Text style={styles.confirmarNota}>
                 {confirmaciones} de 3 confirmaciones para que la comunidad lo verifique.
               </Text>
+              {!yaConfirmo && (
+                <View style={{ gap: 4 }}>
+                  <Text style={styles.confirmarNota}>¿Qué tal estuvo? (opcional)</Text>
+                  <View style={styles.filaEstrellas}>
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <Pressable key={n} onPress={() => setEstrellas(n === estrellas ? 0 : n)} hitSlop={6}>
+                        <Star
+                          size={28}
+                          color={Colors.amarilloSol}
+                          fill={n <= estrellas ? Colors.amarilloSol : 'transparent'}
+                          strokeWidth={1.8}
+                        />
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              )}
               <Boton
                 titulo={yaConfirmo ? 'Gracias por confirmar' : 'Confirmar que existe'}
                 onPress={confirmarQueExiste}
@@ -215,6 +246,8 @@ export default function Ficha() {
             <Boton titulo="Cómo llegar" onPress={comoLlegar} variante={comunidad && !verificado ? 'secundario' : 'primario'} />
             <Boton titulo="Subir foto" variante="secundario" onPress={subirFoto} />
           </View>
+
+          <Comentarios targetType={esNegocio ? 'business' : 'place'} targetId={item.id} />
         </View>
       </ScrollView>
 
@@ -275,6 +308,9 @@ const styles = StyleSheet.create({
   nombre: { ...Type.titulo, color: Colors.texto },
   filaSubtitulo: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   subtitulo: { ...Type.nota, color: Colors.textoSuave },
+  filaRating: { flexDirection: 'row', alignItems: 'center', gap: 3, marginLeft: Spacing.s },
+  ratingTexto: { ...Type.nota, fontSize: 12, color: Colors.texto },
+  filaEstrellas: { flexDirection: 'row', gap: Spacing.s, paddingVertical: 4 },
   descripcion: { ...Type.cuerpo, color: Colors.texto, marginTop: Spacing.s },
   galeriaTitulo: { ...Type.etiqueta, color: Colors.textoSuave },
   galeriaFoto: {

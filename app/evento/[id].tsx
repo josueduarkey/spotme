@@ -1,15 +1,18 @@
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft, CalendarDays, Camera, MapPin } from 'lucide-react-native';
+import { ArrowLeft, BadgeCheck, CalendarDays, Camera, ExternalLink, MapPin, Sparkles } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker, UrlTile } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Boton } from '../../components/Boton';
+import { Comentarios } from '../../components/Comentarios';
+import { IconoTikTok } from '../../components/IconoTikTok';
 import { getFotosEvento } from '../../constants/fotosEventos';
 import { EventItem } from '../../constants/mock';
 import { Colors, Fonts, Peana, Radius, Spacing, Type } from '../../constants/theme';
-import { getEventById } from '../../lib/queries/events';
+import { confirmEvent, getEventById } from '../../lib/queries/events';
+import { buscarEnTikTok } from '../../lib/tiktok';
 
 /**
  * Pantalla 13 (detalle) — Ficha de evento: cuándo es, cómo se ha vivido en
@@ -20,12 +23,34 @@ export default function DetalleEvento() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [evento, setEvento] = useState<EventItem | null>(null);
+  const [confirmando, setConfirmando] = useState(false);
+  const [yaConfirmo, setYaConfirmo] = useState(false);
 
   useEffect(() => {
     getEventById(id).then(setEvento);
   }, [id]);
 
   if (!evento) return <View style={styles.pantalla} />;
+
+  const comunidad = evento.source === 'community';
+  const verificado = evento.isVerified === true;
+  const confirmaciones = evento.verificationCount ?? 0;
+
+  async function confirmarEvento() {
+    if (!evento) return;
+    setConfirmando(true);
+    const res = await confirmEvent(evento.id);
+    setConfirmando(false);
+    if (res.error) {
+      Alert.alert('No se pudo confirmar', res.error);
+      return;
+    }
+    setYaConfirmo(true);
+    setEvento({ ...evento, verificationCount: res.verificationCount, isVerified: res.isVerified });
+    if (res.isVerified) {
+      Alert.alert('¡Evento verificado!', 'Con tu confirmación, la comunidad validó que este evento es real.');
+    }
+  }
 
   const fotos = getFotosEvento(evento.title);
   const fecha = new Date(evento.date);
@@ -48,8 +73,10 @@ export default function DetalleEvento() {
   return (
     <View style={styles.pantalla}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: Spacing.xl }}>
-        {/* Portada: primera foto de la galería, o bloque de fecha decorativo */}
-        {fotos.length > 0 ? (
+        {/* Portada: foto del creador (comunidad) → galería local → bloque de fecha */}
+        {evento.coverImageUrl ? (
+          <Image source={{ uri: evento.coverImageUrl }} style={styles.portada} contentFit="cover" />
+        ) : fotos.length > 0 ? (
           <Image source={fotos[0]} style={styles.portada} contentFit="cover" />
         ) : (
           <View style={styles.portadaFecha}>
@@ -62,7 +89,21 @@ export default function DetalleEvento() {
         )}
 
         <View style={styles.cuerpo}>
-          <Text style={styles.categoria}>Evento · {evento.department}</Text>
+          <View style={styles.filaEtiquetas}>
+            <Text style={styles.categoria}>Evento · {evento.department}</Text>
+            {comunidad && !verificado && (
+              <View style={styles.badgeNuevo}>
+                <Sparkles size={12} color={Colors.superficie} strokeWidth={2.4} />
+                <Text style={styles.badgeTexto}>Nuevo · sin verificar</Text>
+              </View>
+            )}
+            {comunidad && verificado && (
+              <View style={styles.badgeVerificado}>
+                <BadgeCheck size={13} color={Colors.superficie} strokeWidth={2.4} />
+                <Text style={styles.badgeTexto}>Verificado por la comunidad</Text>
+              </View>
+            )}
+          </View>
           <Text style={styles.titulo}>{evento.title}</Text>
 
           {/* Cuándo */}
@@ -90,6 +131,36 @@ export default function DetalleEvento() {
               </ScrollView>
             </View>
           )}
+
+          {/* Confianza comunitaria: mismo modelo que los lugares */}
+          {comunidad && !verificado && (
+            <View style={styles.cajaConfirmar}>
+              <Text style={styles.confirmarTitulo}>¿Este evento es real?</Text>
+              <Text style={styles.confirmarNota}>
+                {confirmaciones} de 3 confirmaciones para que la comunidad lo verifique.
+              </Text>
+              <Boton
+                titulo={yaConfirmo ? 'Gracias por confirmar' : 'Confirmar que es real'}
+                onPress={confirmarEvento}
+                cargando={confirmando}
+                deshabilitado={yaConfirmo}
+              />
+            </View>
+          )}
+
+          {/* Ediciones pasadas del evento en TikTok */}
+          <Pressable onPress={() => buscarEnTikTok(evento.title)} style={styles.cajaTiktok}>
+            <View style={styles.tiktokIcono}>
+              <IconoTikTok size={20} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.tiktokTitulo}>Ver en TikTok</Text>
+              <Text style={styles.tiktokNota} numberOfLines={1}>
+                Videos de ediciones pasadas de &quot;{evento.title}&quot;
+              </Text>
+            </View>
+            <ExternalLink size={18} color={Colors.textoSuave} />
+          </Pressable>
 
           {/* Ubicación exacta */}
           {tieneUbicacion && (
@@ -129,6 +200,8 @@ export default function DetalleEvento() {
               <Boton titulo="Cómo llegar" onPress={comoLlegar} />
             </View>
           )}
+
+          <Comentarios targetType="event" targetId={evento.id} />
         </View>
       </ScrollView>
 
@@ -156,6 +229,39 @@ const styles = StyleSheet.create({
   portadaFechaMes: { ...Type.etiqueta, color: Colors.amarilloSol },
   cuerpo: { padding: Spacing.l, gap: Spacing.s },
   categoria: { ...Type.etiqueta, color: Colors.acento },
+  filaEtiquetas: { flexDirection: 'row', alignItems: 'center', gap: Spacing.s, flexWrap: 'wrap' },
+  badgeNuevo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.acento,
+    borderRadius: Radius.pill,
+    paddingHorizontal: Spacing.s,
+    paddingVertical: 3,
+  },
+  badgeVerificado: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.primario,
+    borderRadius: Radius.pill,
+    paddingHorizontal: Spacing.s,
+    paddingVertical: 3,
+  },
+  badgeTexto: { ...Type.etiqueta, fontSize: 10, letterSpacing: 0.6, color: Colors.superficie },
+  cajaConfirmar: {
+    backgroundColor: Colors.superficie,
+    borderRadius: Radius.m,
+    borderWidth: 1.5,
+    borderColor: Colors.acento,
+    borderBottomWidth: Peana.grosor,
+    borderBottomColor: Colors.acento,
+    padding: Spacing.m,
+    gap: Spacing.s,
+    marginTop: Spacing.m,
+  },
+  confirmarTitulo: { ...Type.subtitulo, fontSize: 18, color: Colors.texto },
+  confirmarNota: { ...Type.nota, color: Colors.textoSuave },
   titulo: { ...Type.titulo, color: Colors.texto },
   filaDato: { flexDirection: 'row', alignItems: 'center', gap: Spacing.s, marginTop: 2 },
   datoTexto: { ...Type.cuerpoDestacado, fontSize: 14, color: Colors.texto },
@@ -180,6 +286,31 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.bordeOscuro,
   },
   coordenadas: { ...Type.nota, fontSize: 11, color: Colors.textoSuave, textAlign: 'center' },
+  cajaTiktok: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.m,
+    backgroundColor: Colors.superficie,
+    borderRadius: Radius.m,
+    borderWidth: 1.5,
+    borderColor: Colors.borde,
+    borderBottomWidth: Peana.grosor,
+    borderBottomColor: Colors.bordeOscuro,
+    padding: Spacing.m,
+    marginTop: Spacing.m,
+  },
+  tiktokIcono: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.s,
+    backgroundColor: Colors.superficie,
+    borderWidth: 1.5,
+    borderColor: Colors.borde,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tiktokTitulo: { ...Type.cuerpoDestacado, fontSize: 15, color: Colors.texto, fontFamily: Fonts.cuerpoBold },
+  tiktokNota: { ...Type.nota, fontSize: 12, color: Colors.textoSuave, marginTop: 2 },
   superpuesto: { position: 'absolute', top: 0, left: 0 },
   volver: {
     marginLeft: Spacing.m,

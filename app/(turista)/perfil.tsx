@@ -1,12 +1,21 @@
 import { useFocusEffect, useRouter } from 'expo-router';
+import { Image } from 'expo-image';
 import { Award, CheckCircle, Compass, LogOut, MapPin, Camera, User, Trophy } from 'lucide-react-native';
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Fonts, Peana, Radius, Spacing, Type } from '../../constants/theme';
-import { getTouristStats, getUserChallenges, TouristStats, UserChallengeInfo } from '../../lib/queries/profile';
+import { getAvatarUrl, getTouristStats, getUserChallenges, TouristStats, UserChallengeInfo, updateAvatar } from '../../lib/queries/profile';
 import { getCurrentProfile, signOut } from '../../lib/queries/auth';
 import { MockProfile, MOCK_PROFILE } from '../../constants/mock';
+
+// Carga segura del módulo nativo (mismo patrón que crear-lugar)
+let ImagePicker: any = null;
+try {
+  ImagePicker = require('expo-image-picker');
+} catch {
+  ImagePicker = null;
+}
 
 export default function Perfil() {
   const router = useRouter();
@@ -14,23 +23,49 @@ export default function Perfil() {
   const [perfil, setPerfil] = useState<MockProfile | null>(null);
   const [stats, setStats] = useState<TouristStats | null>(null);
   const [retos, setRetos] = useState<UserChallengeInfo[]>([]);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [subiendoAvatar, setSubiendoAvatar] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       async function cargarDatos() {
-        const [prof, st, rt] = await Promise.all([
+        const [prof, st, rt, av] = await Promise.all([
           getCurrentProfile(),
           getTouristStats(),
           getUserChallenges(),
+          getAvatarUrl(),
         ]);
         setPerfil(prof);
         setStats(st);
         setRetos(rt);
+        setAvatarUrl(av);
         setCargando(false);
       }
       cargarDatos();
     }, []),
   );
+
+  async function cambiarFotoPerfil() {
+    if (!ImagePicker) {
+      Alert.alert('Galería no disponible', 'Cambiar la foto requiere el Build de Desarrollo.');
+      return;
+    }
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.6,
+      allowsEditing: true,
+      aspect: [1, 1],
+    });
+    if (res.canceled) return;
+    setSubiendoAvatar(true);
+    const { url, error } = await updateAvatar(res.assets[0].uri);
+    setSubiendoAvatar(false);
+    if (error || !url) {
+      Alert.alert('No se pudo cambiar la foto', error ?? 'Intenta de nuevo.');
+      return;
+    }
+    setAvatarUrl(url);
+  }
 
   async function salir() {
     await signOut();
@@ -62,11 +97,20 @@ export default function Perfil() {
     <SafeAreaView style={styles.pantalla} edges={['top']}>
       <ScrollView contentContainerStyle={styles.contenido} showsVerticalScrollIndicator={false}>
         
-        {/* Bloque Encabezado Perfil */}
+        {/* Bloque Encabezado Perfil — tocar el avatar cambia la foto */}
         <View style={styles.tarjetaUsuario}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarTexto}>{inicial}</Text>
-          </View>
+          <Pressable onPress={cambiarFotoPerfil} style={styles.avatar} hitSlop={6}>
+            {subiendoAvatar ? (
+              <ActivityIndicator size="small" color={Colors.superficie} />
+            ) : avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatarFoto} contentFit="cover" />
+            ) : (
+              <Text style={styles.avatarTexto}>{inicial}</Text>
+            )}
+            <View style={styles.avatarCamara}>
+              <Camera size={11} color={Colors.superficie} strokeWidth={2.6} />
+            </View>
+          </Pressable>
           <View style={{ flex: 1 }}>
             <Text style={styles.nombreUsuario}>{userProfile.fullName}</Text>
             <Text style={styles.correoUsuario}>{userProfile.email}</Text>
@@ -188,6 +232,24 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: Radius.pill,
     backgroundColor: Colors.primario,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarFoto: {
+    width: 60,
+    height: 60,
+    borderRadius: Radius.pill,
+  },
+  avatarCamara: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.acento,
+    borderWidth: 1.5,
+    borderColor: Colors.superficie,
     alignItems: 'center',
     justifyContent: 'center',
   },

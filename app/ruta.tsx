@@ -92,6 +92,14 @@ export default function Ruta() {
     setParadas((prev) => prev.filter((p) => p.id !== lugarId));
   }
 
+  // "3 h 20 min" legible en vez de "200 min"
+  function formatoDuracion(min: number): string {
+    if (min < 60) return `${min} min`;
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    return m > 0 ? `${h} h ${m} min` : `${h} h`;
+  }
+
   // Presupuesto estimado: combustible ($0.15/km) + costo por destino
   function calcularPresupuesto(): number {
     const costoCombustible = distancia * 0.15;
@@ -185,32 +193,38 @@ export default function Ruta() {
 
       {/* Panel de Estadísticas y Controles en la Mitad Inferior */}
       <View style={styles.tarjetaFicha}>
-        {/* Estadísticas Básicas */}
+        {/* Estadísticas Básicas: 3 columnas iguales, valores centrados que no se
+            desbordan aunque crezcan ($137, 4 h 10 min) */}
         <View style={styles.stats}>
           <View style={styles.statBox}>
-            <Clock size={18} color={Colors.primario} />
-            <View>
-              <Text style={styles.statEtiqueta}>Duración</Text>
-              <Text style={styles.statValor}>{duracion} min</Text>
-            </View>
+            <Clock size={16} color={Colors.primario} strokeWidth={2.2} />
+            <Text style={styles.statValor} numberOfLines={1} adjustsFontSizeToFit>
+              {formatoDuracion(duracion)}
+            </Text>
+            <Text style={styles.statEtiqueta}>Duración</Text>
           </View>
+          <View style={styles.statSeparador} />
           <View style={styles.statBox}>
-            <DollarSign size={18} color={Colors.acento} />
-            <View>
-              <Text style={styles.statEtiqueta}>Presupuesto</Text>
-              <Text style={styles.statValor}>${calcularPresupuesto()} USD</Text>
-            </View>
+            <DollarSign size={16} color={Colors.acento} strokeWidth={2.2} />
+            <Text style={styles.statValor} numberOfLines={1} adjustsFontSizeToFit>
+              ${calcularPresupuesto()}
+            </Text>
+            <Text style={styles.statEtiqueta}>Presupuesto USD</Text>
           </View>
+          <View style={styles.statSeparador} />
           <View style={styles.statBox}>
-            <MapPin size={18} color={Colors.primario} />
-            <View>
-              <Text style={styles.statEtiqueta}>Distancia</Text>
-              <Text style={styles.statValor}>{distancia} km</Text>
-            </View>
+            <MapPin size={16} color={Colors.primario} strokeWidth={2.2} />
+            <Text style={styles.statValor} numberOfLines={1} adjustsFontSizeToFit>
+              {distancia} km
+            </Text>
+            <Text style={styles.statEtiqueta}>Distancia</Text>
           </View>
         </View>
 
-        <ScrollView style={styles.scrollSecciones} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.scrollSecciones}
+          contentContainerStyle={{ paddingBottom: Spacing.s }}
+          showsVerticalScrollIndicator={false}>
           {/* Paradas Planificadas */}
           <View style={styles.seccion}>
             <Text style={styles.seccionTitulo}>Itinerario del Viaje</Text>
@@ -322,16 +336,26 @@ const styles = StyleSheet.create({
   },
   stats: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'stretch',
     backgroundColor: Colors.fondo,
     borderRadius: Radius.m,
     borderWidth: 1.5,
     borderColor: Colors.borde,
-    padding: Spacing.m,
+    borderBottomWidth: Peana.grosor,
+    borderBottomColor: Colors.bordeOscuro,
+    paddingVertical: Spacing.m,
+    paddingHorizontal: Spacing.s,
   },
-  statBox: { flexDirection: 'row', alignItems: 'center', gap: Spacing.s },
-  statEtiqueta: { ...Type.nota, fontSize: 10, color: Colors.textoSuave },
-  statValor: { ...Type.cuerpoDestacado, fontSize: 14, color: Colors.texto },
+  statBox: { flex: 1, alignItems: 'center', gap: 3 },
+  statSeparador: { width: 1.5, backgroundColor: Colors.borde, marginVertical: 2 },
+  statEtiqueta: { ...Type.nota, fontSize: 10, color: Colors.textoSuave, textAlign: 'center' },
+  statValor: {
+    ...Type.cuerpoDestacado,
+    fontSize: 16,
+    color: Colors.texto,
+    fontFamily: Fonts.cuerpoBold,
+    textAlign: 'center',
+  },
   scrollSecciones: { flex: 1 },
   seccion: { gap: Spacing.s, marginBottom: Spacing.l },
   seccionTitulo: { ...Type.subtitulo, fontSize: 15, color: Colors.texto },

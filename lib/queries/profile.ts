@@ -2,6 +2,48 @@
  * Perfil y Gamificación — Consultas a Supabase (Cuenta B).
  */
 import { getSupabase, isSupabaseConfigured } from '../supabase';
+import { uploadImage } from './uploads';
+
+// ---------------------------------------------------------------------------
+// Foto de perfil (avatar) — profiles.avatar_url ya existía en el schema.
+// ---------------------------------------------------------------------------
+
+let mockAvatarUrl: string | null = null;
+
+export async function getAvatarUrl(): Promise<string | null> {
+  if (!isSupabaseConfigured) return mockAvatarUrl;
+
+  const supabase = getSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data } = await supabase.from('profiles').select('avatar_url').eq('id', user.id).maybeSingle();
+  return (data?.avatar_url as string | null) ?? null;
+}
+
+/** Sube la foto (URI local de expo-image-picker) y la fija como avatar. */
+export async function updateAvatar(photoUri: string): Promise<{ url: string | null; error: string | null }> {
+  if (!isSupabaseConfigured) {
+    await new Promise((r) => setTimeout(r, 300));
+    mockAvatarUrl = photoUri;
+    return { url: photoUri, error: null };
+  }
+
+  const supabase = getSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { url: null, error: 'Inicia sesión para cambiar tu foto.' };
+
+  const { url, error: uploadError } = await uploadImage(photoUri, 'avatars', user.id);
+  if (uploadError || !url) return { url: null, error: uploadError ?? 'No se pudo subir la foto.' };
+
+  const { error } = await supabase.from('profiles').update({ avatar_url: url }).eq('id', user.id);
+  if (error) return { url: null, error: error.message };
+  return { url, error: null };
+}
 
 /** Lugares que cuentan para el reto "Ruta de las Flores completa". */
 const RUTA_DE_LAS_FLORES = ['Juayúa — Ruta de las Flores', 'Apaneca', 'Concepción de Ataco', 'Nahuizalco', 'Salcoatitán'];

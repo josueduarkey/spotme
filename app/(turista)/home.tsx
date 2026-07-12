@@ -1,7 +1,7 @@
 import { Image as ExpoImage } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Navigation } from 'lucide-react-native';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TarjetaEvento } from '../../components/TarjetaEvento';
@@ -19,11 +19,14 @@ export default function Home() {
   const [eventos, setEventos] = useState<EventItem[]>([]);
   const [perfil, setPerfil] = useState<MockProfile | null>(null);
 
-  useEffect(() => {
-    getTopPlaces(5).then(setLugares);
-    getUpcomingEvents().then(setEventos);
-    getCurrentProfile().then(setPerfil);
-  }, []);
+  // Refetch al recibir foco: el evento/lugar recién creado aparece al volver.
+  useFocusEffect(
+    useCallback(() => {
+      getTopPlaces(5).then(setLugares);
+      getUpcomingEvents().then(setEventos);
+      getCurrentProfile().then(setPerfil);
+    }, []),
+  );
 
   const nombreCorto = (perfil?.fullName || MOCK_PROFILE.fullName).split(' ')[0];
 
@@ -74,7 +77,12 @@ export default function Home() {
         </View>
 
         <View style={[styles.seccion, { paddingBottom: Spacing.xl }]}>
-          <Text style={styles.seccionTitulo}>Eventos próximos</Text>
+          <View style={styles.filaSeccionEventos}>
+            <Text style={styles.seccionTitulo}>Eventos próximos</Text>
+            <Pressable onPress={() => router.push('/crear-evento')} style={styles.botonAgregarEvento}>
+              <Text style={styles.botonAgregarEventoTexto}>+ Agregar evento</Text>
+            </Pressable>
+          </View>
           <View style={{ gap: Spacing.m, paddingRight: Spacing.l }}>
             {eventos.map((e) => (
               <TarjetaEvento
@@ -137,4 +145,19 @@ const styles = StyleSheet.create({
   },
   seccion: { gap: Spacing.m, paddingLeft: Spacing.l },
   seccionTitulo: { ...Type.subtitulo, color: Colors.texto, paddingRight: Spacing.l },
+  filaSeccionEventos: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingRight: Spacing.l,
+  },
+  botonAgregarEvento: {
+    backgroundColor: Colors.superficie,
+    borderRadius: Radius.pill,
+    borderWidth: 1.5,
+    borderColor: Colors.borde,
+    paddingHorizontal: Spacing.m,
+    paddingVertical: 6,
+  },
+  botonAgregarEventoTexto: { ...Type.nota, fontSize: 12, color: Colors.primario },
 });
