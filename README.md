@@ -307,16 +307,18 @@ create table public.planned_routes (
 
 ---
 
-## Estado Actual del Proyecto (Fin de la Fase 3)
+## Estado Actual del Proyecto (Fin de la Fase 4)
 
-La aplicación tiene implementada y verificada de extremo a extremo la lógica de **autenticación real, descubrimiento en mapa, creación comunitaria y carga de fotos**:
+La aplicación tiene implementada y verificada de extremo a extremo la arquitectura del Gemelo Digital y la Gamificación del Territorio:
 
-* **Autenticación Directa:** Registro e inicio de sesión integrados con Supabase. Soporta direccionamiento automático según tipo de cuenta.
-* **Mapa de 4 Capas Conmutables:** Renderiza pines dinámicos en tiempo real con filtros independientes para **Lugares Oficiales**, **Lugares de la Comunidad**, **Negocios locales** y **Mapa de Calor de Actividad**.
-* **Dioramas Locales:** Los iconos 3D low-poly de los lugares oficiales se resuelven y cargan localmente, ahorrando ancho de banda y ofreciendo fluidez de navegación.
-* **Creación de Puntos Comunitarios:** Un usuario puede soltar un pin en el mapa, subir una foto de portada y publicar el lugar. El sistema deduce el departamento automáticamente por reverse-geocoding y lo publica como *sin verificar*.
-* **Verificación Colectiva Real:** Otros usuarios pueden pulsar *"Confirmar que existe"* en la ficha del lugar. El trigger en la base de datos restringe duplicados y autovotos, y actualiza el pin a *"Verificado por la comunidad"* de forma inmediata al llegar a 3 confirmaciones.
-* **Subida y Vinculación de Fotos (UGC):** Los turistas pueden tomar fotos y publicarlas. La función `uploadPhoto()` en el backend determina automáticamente el lugar o comercio más cercano por GPS y lo asocia al punto.
+* **Inicio de Sesión con Google OAuth & Auto-Login:** Autenticación fluida con Google usando el navegador nativo y redirección profunda (`spotme://`). Mantiene la sesión persistente (JWT en AsyncStorage) saltándose el login automáticamente en el siguiente inicio.
+* **Gemelo Digital 3D Real (Google Earth):** Visor 3D integrado de CesiumJS que renderiza los **Photorealistic 3D Tiles** de Google Maps, mostrando volcanes, lagos y edificios con relieve 3D fotorrealista y permitiendo volar la cámara a destinos elegidos de la base de datos.
+* **Planificación Vial e Itinerarios (OSRM):** Traza rutas reales de carretera entre cualquier punto de partida y destino, permite añadir paradas intermedias de forma interactiva y estima la duración y el presupuesto de viaje (combustible + visitas).
+* **Algoritmo de Recomendación de Paradas:** Analiza la trayectoria del viaje y calcula la distancia perpendicular para sugerir al turista "joyas ocultas" y atractivos que le queden a menos de 8 km del camino.
+* **Gamificación y Retos en Tiempo Real (PostgreSQL Triggers):** Sistema de niveles y puntos acumulables. Los triggers en Supabase otorgan puntos de exploración y completan retos automáticamente en la base de datos al subir fotos (+25 pts / "Primera postal") o mapear nuevos lugares (+50 pts / "Fundador").
+* **Onboarding Comercial y Métricas del Comercio:** Los usuarios de tipo "negocio" cuentan con un formulario de posicionamiento por GPS/Mapa para registrar su local físico y un Dashboard analítico para medir la interacción de los turistas en su negocio.
+* **Verificación Colectiva Real:** Los usuarios confirman la existencia de lugares creados por la comunidad; al llegar a 3 confirmaciones, el trigger de Postgres pasa automáticamente el pin a *Verificado*.
+* **Vinculación Inteligente UGC:** Las fotos tomadas por turistas se geoposicionan y asocian automáticamente en el backend al atractivo turístico o comercio más cercano por distancia euclidiana.
 
 ### Tabla de Funcionalidades
 
