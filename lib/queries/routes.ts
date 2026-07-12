@@ -4,6 +4,7 @@
 import { getSupabase, isSupabaseConfigured } from '../supabase';
 import { Categoria, Place } from '../../constants/mock';
 import { getPlaces } from './places';
+import { nearbyPlaces, PlaceSearchResult } from './search';
 
 /** Costo de entrada/consumo estimado por categoría de lugar (USD). */
 export const COSTO_CATEGORIA: Record<string, number> = {
@@ -240,8 +241,11 @@ export async function getPlannedRoutes(): Promise<PlannedRoute[]> {
 
 // ---------------------------------------------------------------------------
 // Mi aventura — roadmap personalizado por intereses y días disponibles.
-// El turista elige qué le gusta y cuánto tiempo tiene; el generador agrupa
-// lugares reales del twin por cercanía geográfica en días coherentes.
+// Filosofía: PROFUNDIDAD, no amplitud. El viaje se ancla a UNA zona — la de
+// mayor densidad de lugares que hacen match con los gustos del turista — y
+// todos los días viven ahí, para que conozca un destino de verdad en vez de
+// cruzar el país manejando. La zona se enriquece con lugares reales de Google
+// (Places API New, searchNearby) como sugerencias complementarias.
 // ---------------------------------------------------------------------------
 
 export interface DiaAventura {
@@ -255,72 +259,166 @@ export interface DiaAventura {
   distanciaKm: number;
 }
 
-/** Base del turista: San Salvador (punto de llegada típico). */
-const BASE_SS = { lat: 13.6989, lng: -89.1914 };
+export interface AventuraGenerada {
+  /** Zonas base del viaje en orden (1 si el viaje es corto, 2-3 si es largo). */
+  zonas: string[];
+  dias: DiaAventura[];
+  /** Lugares reales de Google cerca de las zonas (complementan el catálogo). */
+  sugerencias: PlaceSearchResult[];
+}
+
 const COSTO_KM = 0.15; // mismo criterio que la pantalla de ruta
+const LUGARES_POR_DIA = 2; // ritmo humano: la aventura no es una maratón
+const RADIO_ZONA_KM = 35; // qué tan lejos del ancla puede vivir cada zona
+const RADIO_ZONA_AMPLIADO_KM = 60; // si la zona se queda corta de lugares
 
 /**
- * Genera el roadmap: filtra por intereses, ordena por cercanía (vecino más
- * próximo desde San Salvador) y parte en días de 2-3 lugares.
+ * Genera el roadmap por zonas, con profundidad sobre amplitud:
+ * - 1 a 3 días → UNA sola zona (la de mayor densidad de matches) a fondo.
+ * - 5 días → 2 zonas; 7+ → hasta 3, encadenadas por cercanía.
+ * - Máximo 2 lugares por día: el turista disfruta, no corre.
+ * Cada zona se enriquece con lugares reales de Google (searchNearby).
  */
-export async function generarAventura(intereses: Categoria[], dias: number): Promise<DiaAventura[]> {
+export async function generarAventura(intereses: Categoria[], dias: number): Promise<AventuraGenerada> {
   const todos = await getPlaces();
   const setIntereses = new Set(intereses);
+  const esMatch = (p: Place) => setIntereses.has(p.category);
+  const esConfiable = (p: Place) => p.source !== 'community' || p.isVerified === true;
 
-  // 1. Prioridad: lugares que matchean intereses; verificados primero.
-  const puntaje = (p: Place) =>
-    (setIntereses.has(p.category) ? 2 : 0) + (p.source !== 'community' || p.isVerified ? 1 : 0);
-  const candidatos = [...todos].sort((a, b) => puntaje(b) - puntaje(a));
+  const matches = todos.filter(esMatch);
+  const base = matches.length > 0 ? matches : todos;
 
-  // 2. Cupo total: 2-3 lugares por día según catálogo disponible.
-  const porDia = candidatos.length >= dias * 3 ? 3 : 2;
-  const cupo = Math.min(dias * porDia, candidatos.length);
-  const seleccion = candidatos.slice(0, cupo);
+  // Cuántas zonas según el tiempo: 1-3d → 1, 5d → 2, 7d+ → 3.
+  const numZonas = Math.max(1, Math.min(3, Math.ceil(dias / 3)));
 
-  // 3. Orden geográfico: vecino más cercano partiendo de San Salvador,
-  //    para que los días avancen por el territorio sin zigzaguear.
-  const ordenados: Place[] = [];
-  const pendientes = [...seleccion];
-  let cursor = BASE_SS;
-  while (pendientes.length > 0) {
-    let mejorIdx = 0;
-    let mejorDist = Infinity;
-    for (let i = 0; i < pendientes.length; i++) {
-      const d = haversineKm(cursor.lat, cursor.lng, pendientes[i].lat, pendientes[i].lng);
-      if (d < mejorDist) {
-        mejorDist = d;
-        mejorIdx = i;
+  const usados = new Set<string>();
+  const zonasSel: { ancla: Place; lugares: Place[]; diasZona: number }[] = [];
+  let anclaPrevia: Place | null = null;
+  let diasRestantes = dias;
+
+  for (let z = 0; z < numZonas && diasRestantes > 0; z++) {
+    const diasZona = Math.ceil(diasRestantes / (numZonas - z));
+    const disponibles = base.filter((p) => !usados.has(p.id));
+    if (disponibles.length === 0) break;
+
+    // Ancla de la zona: cluster más denso de matches disponibles. Para zonas
+    // siguientes, exige salir de la zona anterior y prefiere la más próxima
+    // (el viaje avanza, no rebota de punta a punta del país).
+    const elegirAncla = (exigirFuera: boolean): Place | null => {
+      let mejor: Place | null = null;
+      let mejorPuntaje = -Infinity;
+      for (const p of disponibles) {
+        const dPrevia = anclaPrevia ? haversineKm(p.lat, p.lng, anclaPrevia.lat, anclaPrevia.lng) : 0;
+        if (exigirFuera && anclaPrevia && dPrevia <= RADIO_ZONA_KM) continue;
+        const densidad = disponibles.filter(
+          (q) => haversineKm(p.lat, p.lng, q.lat, q.lng) <= RADIO_ZONA_KM,
+        ).length;
+        const puntaje = densidad + (esConfiable(p) ? 0.5 : 0) - dPrevia / 100;
+        if (puntaje > mejorPuntaje) {
+          mejorPuntaje = puntaje;
+          mejor = p;
+        }
+      }
+      return mejor;
+    };
+    const ancla: Place | null = elegirAncla(anclaPrevia !== null) ?? elegirAncla(false);
+    if (!ancla) break;
+
+    // Lugares de la zona: matches primero, cercanos al ancla primero.
+    const enZona = (radio: number) =>
+      todos
+        .filter((p) => !usados.has(p.id) && haversineKm(ancla.lat, ancla.lng, p.lat, p.lng) <= radio)
+        .sort(
+          (a, b) =>
+            Number(esMatch(b)) - Number(esMatch(a)) ||
+            haversineKm(ancla.lat, ancla.lng, a.lat, a.lng) -
+              haversineKm(ancla.lat, ancla.lng, b.lat, b.lng),
+        );
+
+    let lugaresZona = enZona(RADIO_ZONA_KM);
+    if (lugaresZona.length < diasZona * LUGARES_POR_DIA) lugaresZona = enZona(RADIO_ZONA_AMPLIADO_KM);
+    lugaresZona = lugaresZona.slice(0, diasZona * LUGARES_POR_DIA);
+    for (const l of lugaresZona) usados.add(l.id);
+
+    // Orden de vecino más cercano dentro de la zona (días sin zigzag).
+    const ordenados: Place[] = [];
+    const pendientes = [...lugaresZona];
+    let cursor = { lat: ancla.lat, lng: ancla.lng };
+    while (pendientes.length > 0) {
+      let mejorIdx = 0;
+      let mejorDist = Infinity;
+      for (let i = 0; i < pendientes.length; i++) {
+        const d = haversineKm(cursor.lat, cursor.lng, pendientes[i].lat, pendientes[i].lng);
+        if (d < mejorDist) {
+          mejorDist = d;
+          mejorIdx = i;
+        }
+      }
+      const [siguiente] = pendientes.splice(mejorIdx, 1);
+      ordenados.push(siguiente);
+      cursor = { lat: siguiente.lat, lng: siguiente.lng };
+    }
+
+    const diasReales = Math.min(diasZona, Math.ceil(ordenados.length / LUGARES_POR_DIA));
+    zonasSel.push({ ancla, lugares: ordenados, diasZona: diasReales });
+    diasRestantes -= diasZona;
+    anclaPrevia = ancla;
+  }
+
+  // Partir cada zona en días consecutivos de máximo 2 lugares.
+  const resultadoDias: DiaAventura[] = [];
+  const nombresZonas: string[] = [];
+  let numeroDia = 1;
+  for (const zonaSel of zonasSel) {
+    const deptoConteo = new Map<string, number>();
+    for (const l of zonaSel.lugares) deptoConteo.set(l.department, (deptoConteo.get(l.department) ?? 0) + 1);
+    const nombreZona = [...deptoConteo.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? zonaSel.ancla.department;
+    if (!nombresZonas.includes(nombreZona)) nombresZonas.push(nombreZona);
+
+    for (let d = 0; d < zonaSel.diasZona; d++) {
+      const lugares = zonaSel.lugares.slice(d * LUGARES_POR_DIA, (d + 1) * LUGARES_POR_DIA);
+      if (lugares.length === 0) break;
+
+      let distancia = 0;
+      for (let i = 1; i < lugares.length; i++) {
+        distancia += haversineKm(lugares[i - 1].lat, lugares[i - 1].lng, lugares[i].lat, lugares[i].lng);
+      }
+      const entradas = lugares.reduce((s, p) => s + (COSTO_CATEGORIA[p.category] ?? 5), 0);
+
+      const porDepto = new Map<string, number>();
+      for (const l of lugares) porDepto.set(l.department, (porDepto.get(l.department) ?? 0) + 1);
+      const titulo = [...porDepto.entries()].sort((a, b) => b[1] - a[1])[0][0];
+
+      resultadoDias.push({
+        dia: numeroDia++,
+        titulo,
+        lugares,
+        presupuesto: Math.ceil(entradas + distancia * COSTO_KM),
+        distanciaKm: Math.round(distancia),
+      });
+    }
+  }
+
+  // Enriquecer con Google alrededor de cada ancla (si falla, sale igual).
+  let sugerencias: PlaceSearchResult[] = [];
+  try {
+    const nombresPropios = new Set([...usados].map((id) => todos.find((p) => p.id === id)?.name.toLowerCase()));
+    const porZona = await Promise.all(
+      zonasSel.map((z) => nearbyPlaces(z.ancla.lat, z.ancla.lng, intereses, 25).catch(() => [])),
+    );
+    const vistos = new Set<string>();
+    for (const lista of porZona) {
+      for (const s of lista) {
+        const clave = s.name.toLowerCase();
+        if (nombresPropios.has(clave) || vistos.has(clave)) continue;
+        vistos.add(clave);
+        sugerencias.push(s);
       }
     }
-    const [siguiente] = pendientes.splice(mejorIdx, 1);
-    ordenados.push(siguiente);
-    cursor = { lat: siguiente.lat, lng: siguiente.lng };
+    sugerencias = sugerencias.slice(0, 5);
+  } catch {
+    sugerencias = [];
   }
 
-  // 4. Partir en días consecutivos (la cadena ya es geográficamente coherente).
-  const resultado: DiaAventura[] = [];
-  for (let d = 0; d < dias && d * porDia < ordenados.length; d++) {
-    const lugares = ordenados.slice(d * porDia, (d + 1) * porDia);
-    if (lugares.length === 0) break;
-
-    let distancia = 0;
-    for (let i = 1; i < lugares.length; i++) {
-      distancia += haversineKm(lugares[i - 1].lat, lugares[i - 1].lng, lugares[i].lat, lugares[i].lng);
-    }
-    const entradas = lugares.reduce((s, p) => s + (COSTO_CATEGORIA[p.category] ?? 5), 0);
-
-    // Departamento dominante como título del día
-    const porDepto = new Map<string, number>();
-    for (const l of lugares) porDepto.set(l.department, (porDepto.get(l.department) ?? 0) + 1);
-    const titulo = [...porDepto.entries()].sort((a, b) => b[1] - a[1])[0][0];
-
-    resultado.push({
-      dia: d + 1,
-      titulo,
-      lugares,
-      presupuesto: Math.ceil(entradas + distancia * COSTO_KM),
-      distanciaKm: Math.round(distancia),
-    });
-  }
-  return resultado;
+  return { zonas: nombresZonas, dias: resultadoDias, sugerencias };
 }

@@ -32,8 +32,8 @@ const GOOGLE_MAPS_API_KEY =
   Constants.expoConfig?.android?.config?.googleMaps?.apiKey || 'AIzaSyBE5rKSq03ZEN8tlGbSaQhOnGgf6IIEoJ4';
 
 // Centro Histórico de San Salvador — el escaparate principal del gemelo 3D.
-// Coordenadas públicas de los hitos; ajustables si el equipo quiere afinarlas.
-const CENTRO_HISTORICO = { lat: 13.6989, lng: -89.1914 };
+// Coordenadas oficiales del equipo (13°41′51″ N, 89°11′25″ O).
+const CENTRO_HISTORICO = { lat: 13.697497, lng: -89.190313 };
 const HITOS_CENTRO = [
   { name: 'Catedral Metropolitana', lat: 13.6994, lng: -89.1912 },
   { name: 'Palacio Nacional', lat: 13.699, lng: -89.1917 },
@@ -253,12 +253,15 @@ export default function Gemelo3D() {
             // El Centro Histórico es nuestro escaparate: vuelo cinematográfico
             // en perspectiva oblicua sobre la Plaza Cívica (Catedral + Palacio).
             const CENTRO = ${centroJson};
+            // OJO: la altura es ELIPSOIDAL (absoluta). El Centro Histórico está a
+            // ~660 m sobre el nivel del mar: una cámara por debajo de eso nace
+            // ENTERRADA en el relieve (pantalla negra / vista desde abajo).
             function volarCentro(animado) {
               const opts = {
-                destination: Cesium.Cartesian3.fromDegrees(CENTRO.lng, CENTRO.lat - 0.0035, 430),
+                destination: Cesium.Cartesian3.fromDegrees(CENTRO.lng, CENTRO.lat - 0.006, 1200),
                 orientation: {
-                  heading: Cesium.Math.toRadians(10.0),
-                  pitch: Cesium.Math.toRadians(-28.0),
+                  heading: Cesium.Math.toRadians(0.0),
+                  pitch: Cesium.Math.toRadians(-35.0),
                   roll: 0.0
                 }
               };
@@ -432,12 +435,14 @@ export default function Gemelo3D() {
                   ));
                 }
                 if (data.type === 'fly_to') {
-                  // Volar al destino en 3D
+                  // Volar al destino en 3D. Altura absoluta segura para todo el
+                  // país: el punto más alto de El Salvador es ~2730 m (El Pital);
+                  // 3200 m garantiza no nacer dentro del relieve en ningún destino.
                   viewer.camera.flyTo({
-                    destination: Cesium.Cartesian3.fromDegrees(data.lng, data.lat - 0.003, 500),
+                    destination: Cesium.Cartesian3.fromDegrees(data.lng, data.lat - 0.012, 3200),
                     orientation: {
                       heading: Cesium.Math.toRadians(0.0),
-                      pitch: Cesium.Math.toRadians(-35.0),
+                      pitch: Cesium.Math.toRadians(-40.0),
                       roll: 0.0
                     },
                     duration: 2.0

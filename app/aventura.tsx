@@ -21,7 +21,7 @@ import { getDioramaSource } from '../constants/dioramas';
 import { getFotoLugar } from '../constants/fotosLugares';
 import { CATEGORIAS, Categoria, Place } from '../constants/mock';
 import { Colors, Fonts, Peana, Radius, Spacing, Type } from '../constants/theme';
-import { DiaAventura, generarAventura } from '../lib/queries/routes';
+import { AventuraGenerada, DiaAventura, generarAventura } from '../lib/queries/routes';
 
 /** Opciones de tiempo — lenguaje de viajero, no de formulario. */
 const OPCIONES_DIAS = [
@@ -58,7 +58,7 @@ export default function Aventura() {
   const [intereses, setIntereses] = useState<Set<Categoria>>(new Set());
   const [dias, setDias] = useState<number>(3);
   const [generando, setGenerando] = useState(false);
-  const [itinerario, setItinerario] = useState<DiaAventura[] | null>(null);
+  const [aventura, setAventura] = useState<AventuraGenerada | null>(null);
 
   function alternarInteres(c: Categoria) {
     setIntereses((prev) => {
@@ -73,7 +73,7 @@ export default function Aventura() {
     setGenerando(true);
     const res = await generarAventura([...intereses], dias);
     setGenerando(false);
-    setItinerario(res);
+    setAventura(res);
   }
 
   function trazarDia(d: DiaAventura) {
@@ -88,6 +88,7 @@ export default function Aventura() {
     });
   }
 
+  const itinerario = aventura?.dias ?? null;
   const presupuestoTotal = itinerario?.reduce((s, d) => s + d.presupuesto, 0) ?? 0;
   const totalLugares = itinerario?.reduce((s, d) => s + d.lugares.length, 0) ?? 0;
 
@@ -166,11 +167,14 @@ export default function Aventura() {
               <Sparkles size={18} color={Colors.amarilloSol} strokeWidth={2.2} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.resumenTitulo}>
-                  {itinerario.length} {itinerario.length === 1 ? 'día' : 'días'} · {totalLugares} lugares
+                  {aventura!.zonas.length > 1 ? aventura!.zonas.join(' → ') : `Tu base: ${aventura!.zonas[0] ?? ''}`}
                 </Text>
-                <Text style={styles.resumenNota}>Presupuesto estimado: ~${presupuestoTotal} USD</Text>
+                <Text style={styles.resumenNota}>
+                  {itinerario.length} {itinerario.length === 1 ? 'día' : 'días'} · {totalLugares} lugares · ~$
+                  {presupuestoTotal} USD
+                </Text>
               </View>
-              <Pressable onPress={() => setItinerario(null)} style={styles.botonRegenerar}>
+              <Pressable onPress={() => setAventura(null)} style={styles.botonRegenerar}>
                 <RefreshCcw size={16} color={Colors.primario} strokeWidth={2.2} />
               </Pressable>
             </View>
@@ -229,9 +233,45 @@ export default function Aventura() {
               </View>
             ))}
 
+            {/* Sugerencias de Google cerca de la zona — alimentan el twin */}
+            {aventura!.sugerencias.length > 0 && (
+              <View style={styles.cardSugerencias}>
+                <Text style={styles.sugerenciasTitulo}>También cerca de tu zona</Text>
+                <Text style={styles.sugerenciasNota}>
+                  Lugares reales que aún no están en el mapa de Spotmi — toca uno para agregarlo tú.
+                </Text>
+                {aventura!.sugerencias.map((s) => (
+                  <Pressable
+                    key={`${s.name}-${s.lat}`}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/crear-lugar',
+                        params: { lat: String(s.lat), lng: String(s.lng) },
+                      })
+                    }
+                    style={({ pressed }) => [styles.filaSugerencia, pressed && { opacity: 0.85 }]}>
+                    <View style={styles.sugerenciaIcono}>
+                      {(() => {
+                        const Icono = ICONO_CATEGORIA[s.category];
+                        return <Icono size={16} color={Colors.acento} strokeWidth={2.2} />;
+                      })()}
+                    </View>
+                    <View style={{ flex: 1, gap: 1 }}>
+                      <Text style={styles.lugarNombre} numberOfLines={1}>
+                        {s.name}
+                      </Text>
+                      <Text style={styles.lugarDetalle} numberOfLines={1}>
+                        {s.address}
+                      </Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+
             <Text style={styles.pie}>
-              Los días se arman agrupando lugares cercanos entre sí, para que pases el tiempo
-              descubriendo — no manejando.
+              Máximo 2 lugares por día y zonas cercanas entre sí: la aventura se disfruta, no se
+              corre. Con más días, el viaje avanza a nuevas zonas.
             </Text>
           </>
         )}
@@ -378,4 +418,34 @@ const styles = StyleSheet.create({
   },
   botonTrazarTexto: { ...Type.cuerpoDestacado, fontSize: 13, color: Colors.superficie },
   pie: { ...Type.nota, fontSize: 12, color: Colors.textoSuave, fontStyle: 'italic', textAlign: 'center' },
+  cardSugerencias: {
+    backgroundColor: Colors.superficie,
+    borderRadius: Radius.m,
+    borderWidth: 1.5,
+    borderColor: Colors.acento,
+    borderBottomWidth: Peana.grosor,
+    borderBottomColor: Colors.acento,
+    padding: Spacing.m,
+    gap: Spacing.s,
+  },
+  sugerenciasTitulo: { ...Type.cuerpoDestacado, fontSize: 15, color: Colors.texto, fontFamily: Fonts.cuerpoBold },
+  sugerenciasNota: { ...Type.nota, fontSize: 12, color: Colors.textoSuave, marginTop: -4 },
+  filaSugerencia: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.s,
+    backgroundColor: Colors.fondo,
+    borderRadius: Radius.s,
+    borderWidth: 1.5,
+    borderColor: Colors.borde,
+    padding: Spacing.s,
+  },
+  sugerenciaIcono: {
+    width: 34,
+    height: 34,
+    borderRadius: Radius.s,
+    backgroundColor: Colors.rellenoSuave,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

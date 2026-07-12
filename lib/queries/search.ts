@@ -96,6 +96,92 @@ async function searchNominatim(query: string): Promise<PlaceSearchResult[]> {
   }));
 }
 
+// ---------------------------------------------------------------------------
+// Búsqueda por cercanía (Places API New, searchNearby) — enriquece la zona de
+// "Mi aventura" con lugares reales de Google alrededor del ancla del match.
+// ---------------------------------------------------------------------------
+
+/** Tipos de Places API (New) por categoría — conservadores para evitar 400. */
+const TIPOS_POR_CATEGORIA: Record<Categoria, string[]> = {
+  naturaleza: ['national_park', 'park'],
+  cultura: ['museum', 'historical_landmark', 'art_gallery'],
+  gastronomia: ['restaurant', 'cafe'],
+  aventura: ['amusement_park', 'tourist_attraction'],
+  playa: ['beach'],
+  historia: ['historical_landmark', 'museum'],
+  urbano: ['tourist_attraction', 'shopping_mall'],
+};
+
+async function fetchNearby(
+  lat: number,
+  lng: number,
+  radiusM: number,
+  includedTypes: string[],
+): Promise<PlaceSearchResult[]> {
+  const res = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': GOOGLE_KEY,
+      'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.location,places.types',
+    },
+    body: JSON.stringify({
+      languageCode: 'es',
+      regionCode: 'SV',
+      maxResultCount: 10,
+      rankPreference: 'POPULARITY',
+      includedTypes,
+      locationRestriction: {
+        circle: { center: { latitude: lat, longitude: lng }, radius: Math.min(radiusM, 50000) },
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(`searchNearby ${res.status}`);
+  const data: {
+    places?: {
+      displayName?: { text?: string };
+      formattedAddress?: string;
+      location?: { latitude: number; longitude: number };
+      types?: string[];
+    }[];
+  } = await res.json();
+  return (data.places ?? [])
+    .filter((p) => p.location && p.displayName?.text)
+    .map((p) => ({
+      name: p.displayName!.text!,
+      address: p.formattedAddress ?? '',
+      lat: p.location!.latitude,
+      lng: p.location!.longitude,
+      category: toCategoria(p.types),
+      source: 'google' as const,
+    }));
+}
+
+/**
+ * Lugares reales de Google cerca de un punto, filtrados por los intereses del
+ * turista. Si algún tipo no es válido para la API, reintenta con
+ * tourist_attraction; si Google falla del todo, devuelve [] (la aventura
+ * funciona igual solo con el catálogo del twin).
+ */
+export async function nearbyPlaces(
+  lat: number,
+  lng: number,
+  categorias: Categoria[],
+  radiusKm = 25,
+): Promise<PlaceSearchResult[]> {
+  const tipos = [...new Set(categorias.flatMap((c) => TIPOS_POR_CATEGORIA[c] ?? []))].slice(0, 5);
+  try {
+    return await fetchNearby(lat, lng, radiusKm * 1000, tipos.length ? tipos : ['tourist_attraction']);
+  } catch (e) {
+    console.warn('nearbyPlaces:', e);
+    try {
+      return await fetchNearby(lat, lng, radiusKm * 1000, ['tourist_attraction']);
+    } catch {
+      return [];
+    }
+  }
+}
+
 export async function searchPlaces(query: string): Promise<PlaceSearchResult[]> {
   const q = query.trim();
   if (q.length < 2) return [];
