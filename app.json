@@ -42,7 +42,20 @@
       "expo-font",
       "expo-image",
       "expo-status-bar",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Spotmi usa tus fotos para publicar lugares y compartirlos en el mapa.",
+          "cameraPermission": "Spotmi usa la cámara para fotografiar lugares que descubres."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Spotmi usa tu ubicación para colocar el pin de un lugar nuevo y geoetiquetar tus fotos."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

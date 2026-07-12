@@ -25,7 +25,17 @@ export interface Place {
   category: Categoria;
   coverImageUrl: string | null; // Cuenta B: foto real o generada
   mapIconUrl: string | null; // Cuenta B: diorama isométrico
+  // Campos del pivote (opcionales para no romper las queries de Cuenta B;
+  // `undefined` se trata como lugar oficial ya verificado)
+  source?: 'official' | 'community';
+  createdBy?: string | null;
+  verificationCount?: number;
+  isVerified?: boolean;
 }
+
+/** Helpers de lectura para los campos del pivote. */
+export const esComunidad = (p: Place) => p.source === 'community';
+export const estaVerificado = (p: Place) => p.source !== 'community' || p.isVerified === true;
 
 export interface Business {
   id: string;
@@ -193,6 +203,37 @@ export const MOCK_PLACES: Place[] = [
     category: 'aventura',
     coverImageUrl: null,
     mapIconUrl: null,
+  },
+  // Lugares de comunidad (pivote Fase 3) — ejemplos para desarrollo sin backend
+  {
+    id: 'c1',
+    name: 'Cascada Los Tercios',
+    department: 'Cuscatlán',
+    description: 'Cascada sobre columnas hexagonales de basalto, a 20 minutos de Suchitoto. La descubrimos siguiendo un sendero local.',
+    lat: 13.929,
+    lng: -89.015,
+    category: 'naturaleza',
+    coverImageUrl: null,
+    mapIconUrl: null,
+    source: 'community',
+    createdBy: 'mock-user-2',
+    verificationCount: 1,
+    isVerified: false,
+  },
+  {
+    id: 'c2',
+    name: 'Mirador El Boquerón Sur',
+    department: 'San Salvador',
+    description: 'Vista al cráter del volcán de San Salvador desde el lado menos conocido. Ideal al atardecer.',
+    lat: 13.723,
+    lng: -89.288,
+    category: 'aventura',
+    coverImageUrl: null,
+    mapIconUrl: null,
+    source: 'community',
+    createdBy: 'mock-user-3',
+    verificationCount: 3,
+    isVerified: true,
   },
 ];
 

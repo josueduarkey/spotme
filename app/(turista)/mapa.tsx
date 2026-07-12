@@ -1,14 +1,14 @@
-import { useRouter } from 'expo-router';
-import { LucideIcon, Mountain } from 'lucide-react-native';
-import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
-import MapView, { Circle, Marker } from 'react-native-maps';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { LucideIcon, Mountain, Plus, Users } from 'lucide-react-native';
+import React, { useCallback, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import MapView, { Circle, Marker, UrlTile } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChipCapa } from '../../components/ChipCapa';
 import { ICONO_CATEGORIA, IconoActividad, IconoEventos, IconoNegocio, IconoRetos } from '../../components/iconos';
 import { MarcadorMapa } from '../../components/MarcadorMapa';
-import { ActivityPoint, Business, Place } from '../../constants/mock';
-import { Colors, Spacing } from '../../constants/theme';
+import { ActivityPoint, Business, esComunidad, Place } from '../../constants/mock';
+import { Colors, Peana, Radius, Spacing } from '../../constants/theme';
 import { getActivityPoints } from '../../lib/queries/activity';
 import { getBusinesses } from '../../lib/queries/businesses';
 import { getPlaces } from '../../lib/queries/places';
@@ -21,10 +21,11 @@ const EL_SALVADOR = {
   longitudeDelta: 2.4,
 };
 
-type Capa = 'lugares' | 'negocios' | 'actividad' | 'eventos' | 'retos';
+type Capa = 'oficiales' | 'comunidad' | 'negocios' | 'actividad' | 'eventos' | 'retos';
 
 const CAPAS: { id: Capa; etiqueta: string; Icono: LucideIcon; disponible: boolean }[] = [
-  { id: 'lugares', etiqueta: 'Lugares', Icono: Mountain, disponible: true },
+  { id: 'oficiales', etiqueta: 'Oficiales', Icono: Mountain, disponible: true },
+  { id: 'comunidad', etiqueta: 'Comunidad', Icono: Users, disponible: true },
   { id: 'negocios', etiqueta: 'Negocios', Icono: IconoNegocio, disponible: true },
   { id: 'actividad', etiqueta: 'Actividad', Icono: IconoActividad, disponible: true },
   { id: 'eventos', etiqueta: 'Eventos', Icono: IconoEventos, disponible: false }, // Fase 5
@@ -34,16 +35,19 @@ const CAPAS: { id: Capa; etiqueta: string; Icono: LucideIcon; disponible: boolea
 /** Pantalla 6 — Mapa full con selector de capas (el corazón del digital twin). */
 export default function Mapa() {
   const router = useRouter();
-  const [capasActivas, setCapasActivas] = useState<Set<Capa>>(new Set(['lugares']));
+  const [capasActivas, setCapasActivas] = useState<Set<Capa>>(new Set(['oficiales', 'comunidad']));
   const [lugares, setLugares] = useState<Place[]>([]);
   const [negocios, setNegocios] = useState<Business[]>([]);
   const [actividad, setActividad] = useState<ActivityPoint[]>([]);
 
-  useEffect(() => {
-    getPlaces().then(setLugares);
-    getBusinesses().then(setNegocios);
-    getActivityPoints().then(setActividad);
-  }, []);
+  // Recarga al volver (ej. después de crear un lugar nuevo en 7b).
+  useFocusEffect(
+    useCallback(() => {
+      getPlaces().then(setLugares);
+      getBusinesses().then(setNegocios);
+      getActivityPoints().then(setActividad);
+    }, []),
+  );
 
   function alternarCapa(capa: Capa) {
     setCapasActivas((prev) => {
@@ -54,11 +58,20 @@ export default function Mapa() {
     });
   }
 
+  const oficiales = lugares.filter((l) => !esComunidad(l));
+  const comunidad = lugares.filter(esComunidad);
+
   return (
     <View style={styles.pantalla}>
       <MapView style={StyleSheet.absoluteFill} initialRegion={EL_SALVADOR}>
-        {capasActivas.has('lugares') &&
-          lugares.map((l) => (
+        <UrlTile
+          urlTemplate="https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
+          shouldReplaceMapContent={true}
+          maximumZ={19}
+          tileSize={256}
+        />
+        {capasActivas.has('oficiales') &&
+          oficiales.map((l) => (
             <Marker
               key={l.id}
               coordinate={{ latitude: l.lat, longitude: l.lng }}
@@ -69,6 +82,22 @@ export default function Mapa() {
                 departamento={l.department}
                 mapIconUrl={l.mapIconUrl}
                 tipo="lugar"
+              />
+            </Marker>
+          ))}
+
+        {capasActivas.has('comunidad') &&
+          comunidad.map((l) => (
+            <Marker
+              key={l.id}
+              coordinate={{ latitude: l.lat, longitude: l.lng }}
+              onPress={() => router.push({ pathname: '/ficha/[id]', params: { id: l.id, tipo: 'lugar' } })}>
+              <MarcadorMapa
+                Icono={ICONO_CATEGORIA[l.category]}
+                tipo="lugar"
+                comunidad
+                verificado={l.isVerified === true}
+                fotoUrl={l.coverImageUrl}
               />
             </Marker>
           ))}
@@ -113,6 +142,13 @@ export default function Mapa() {
           ))}
         </ScrollView>
       </SafeAreaView>
+
+      {/* FAB: crear lugar nuevo (pivote Fase 3) */}
+      <Pressable
+        onPress={() => router.push('/crear-lugar')}
+        style={({ pressed }) => [styles.fab, pressed && { transform: [{ translateY: 2 }], borderBottomWidth: 2 }]}>
+        <Plus size={26} color={Colors.superficie} strokeWidth={2.6} />
+      </Pressable>
     </View>
   );
 }
@@ -124,5 +160,18 @@ const styles = StyleSheet.create({
     gap: Spacing.s,
     paddingHorizontal: Spacing.m,
     paddingVertical: Spacing.s,
+  },
+  fab: {
+    position: 'absolute',
+    right: Spacing.l,
+    bottom: Spacing.l,
+    width: 58,
+    height: 58,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.primario,
+    borderBottomWidth: Peana.grosor,
+    borderBottomColor: Colors.primarioOscuro,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

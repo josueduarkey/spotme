@@ -34,7 +34,14 @@ Hackathon de Turismo Creativo Vol. 1 — PoC construido en 2 días con dos cuent
 - Solo se recompila el APK si cambia algo nativo (nueva librería con código nativo o config de `app.json`). Todo el código JS/TS de las Fases 3-6 se ve sin rebuild. Comando: `npx eas-cli build --profile development --platform android --non-interactive --no-wait` (keystore local en `credentials/`, gitignoreado — no borrar).
 - Para la demo: instalar este mismo APK en los 2-3 celulares del equipo + un celular corriendo Metro, o EAS Update si hay tiempo.
 
-**Fase 3 — SIGUIENTE (editar aquí las nuevas features antes de arrancar):** Contenido Generado por Usuario (cámara/galería y subida de fotos). Fase 3 B propuesta: `uploadPhoto()` en `lib/queries/uploads.ts` (Storage bucket `uploads` + fila en tabla `uploads` + asociación al lugar más cercano por distancia).
+**Fase 3 — Cuenta A: COMPLETA ✅ (2026-07-11)** Pivote de creación comunitaria en frontend:
+
+- Pantalla 7b `app/crear-lugar.tsx`: 3 pasos sin fricción (pin central sobre el mapa + "usar mi ubicación" con expo-location → foto obligatoria con expo-image-picker cámara/galería → nombre/categoría/descripción → publicar). Entrada: FAB "+" en el mapa.
+- Ficha (7): badge "Nuevo · sin verificar" (acento) / "Verificado por la comunidad" (primario), caja "¿Estuviste aquí?" con contador "X de 3" y botón "Confirmar que existe" (se deshabilita tras confirmar); muestra `coverImageUrl` como portada cuando existe.
+- `MarcadorMapa` con 3 estados: oficial (diorama), comunidad sin verificar (foto thumbnail circular + badge "Nuevo"), comunidad verificado (foto + check primario). Capas "Lugares" divididas en **Oficiales** y **Comunidad**; el mapa refetchea al recibir foco (el lugar recién creado aparece al volver).
+- `Place` con campos opcionales del pivote + helpers `esComunidad`/`estaVerificado` en `constants/mock.ts`. Call-sites usan `createPlace`/`confirmPlace` de `lib/queries/places.ts` (ya conectados por Cuenta B ✅).
+- ⚠️ **expo-image-picker y expo-location son módulos nativos nuevos** + sus config plugins en `app.json` → el APK dev build de Android **sí necesita rebuild** para la pantalla 7b (en iPhone/Expo Go funciona ya). Comando en la nota de arriba.
+- Pendiente de Fase 3 original: pantalla 8 (subir foto a lugar existente) — el botón "Subir foto" de la ficha sigue en stub; `uploadPhoto()` de B con asociación al lugar más cercano queda para ese cierre.
 
 **Fase 3 — Cuenta B: COMPLETA ✅** (verificada E2E contra Supabase real: crear lugar → foto a Storage → 3 confirmaciones de usuarios distintos → `is_verified=true` automático por trigger; creador no puede autoconfirmar (RLS 42501), doble confirmación bloqueada (unique 23505))
 
