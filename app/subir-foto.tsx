@@ -1,6 +1,4 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
-import * as Location from 'expo-location';
 import { Image } from 'expo-image';
 import { ArrowLeft, Camera, ImageIcon, MapPin } from 'lucide-react-native';
 import React, { useState } from 'react';
@@ -9,6 +7,20 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Boton } from '../components/Boton';
 import { Colors, Peana, Radius, Spacing, Type } from '../constants/theme';
 import { uploadPhoto } from '../lib/queries/uploads';
+
+// Carga segura de módulos nativos para evitar colapsar la inicialización en Expo Go
+let ImagePicker: any = null;
+let Location: any = null;
+try {
+  ImagePicker = require('expo-image-picker');
+} catch (e) {
+  console.warn('expo-image-picker no disponible en el cliente nativo actual.');
+}
+try {
+  Location = require('expo-location');
+} catch (e) {
+  console.warn('expo-location no disponible en el cliente nativo actual.');
+}
 
 /**
  * Pantalla 8 — Subir foto a un lugar/negocio existente.
@@ -24,6 +36,13 @@ export default function SubirFoto() {
   const targetType = params.tipo === 'negocio' ? 'business' : params.tipo === 'lugar' ? 'place' : undefined;
 
   async function tomarFoto() {
+    if (!ImagePicker) {
+      Alert.alert(
+        'Cámara no disponible',
+        'El módulo de cámara requiere el Build de Desarrollo. Por favor descarga e instala el APK correspondiente.'
+      );
+      return;
+    }
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Sin permiso', 'Activa el permiso de cámara para tomar la foto.');
@@ -34,12 +53,23 @@ export default function SubirFoto() {
   }
 
   async function elegirDeGaleria() {
+    if (!ImagePicker) {
+      Alert.alert(
+        'Galería no disponible',
+        'El acceso a imágenes requiere el Build de Desarrollo. Por favor descarga e instala el APK correspondiente.'
+      );
+      return;
+    }
     const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
     if (!res.canceled) setFotoUri(res.assets[0].uri);
   }
 
   /** GPS actual; si lo niegan y la ficha pasó coordenadas, usa las del lugar. */
   async function obtenerCoordenadas(): Promise<{ lat: number; lng: number } | null> {
+    if (!Location) {
+      if (params.lat && params.lng) return { lat: Number(params.lat), lng: Number(params.lng) };
+      return null;
+    }
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status === 'granted') {
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });

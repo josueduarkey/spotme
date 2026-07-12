@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import { Navigation } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -40,6 +41,16 @@ export default function Home() {
             <Text style={styles.ctaNota}>Lugares, negocios y la huella de otros viajeros, capa por capa.</Text>
           </View>
           <MotivoCapas tamano={64} />
+        </Pressable>
+
+        <Pressable onPress={() => router.push('/planificar-ruta')} style={({ pressed }) => [styles.ctaRuta, pressed && { opacity: 0.92 }]}>
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={styles.ctaTitulo}>Planificar tu ruta</Text>
+            <Text style={styles.ctaNotaRuta}>Calcula distancias, presupuestos y descubre joyas en tu camino.</Text>
+          </View>
+          <View style={styles.iconoViaje}>
+            <Navigation size={26} color={Colors.superficie} strokeWidth={2.4} />
+          </View>
         </Pressable>
 
         <View style={styles.seccion}>
@@ -86,8 +97,29 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.tintaOscura,
     padding: Spacing.l,
   },
+  ctaRuta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.m,
+    marginHorizontal: Spacing.l,
+    backgroundColor: Colors.acento,
+    borderRadius: Radius.l,
+    borderBottomWidth: Peana.grosor,
+    borderBottomColor: '#C05C14',
+    padding: Spacing.l,
+    marginTop: -Spacing.s,
+  },
   ctaTitulo: { ...Type.subtitulo, color: Colors.textoInvertido },
   ctaNota: { ...Type.nota, color: Colors.azulLago },
+  ctaNotaRuta: { ...Type.nota, color: Colors.fondo },
+  iconoViaje: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.m,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   seccion: { gap: Spacing.m, paddingLeft: Spacing.l },
   seccionTitulo: { ...Type.subtitulo, color: Colors.texto, paddingRight: Spacing.l },
 });

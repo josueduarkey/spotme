@@ -1,6 +1,4 @@
 import { useRouter } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
-import * as Location from 'expo-location';
 import { Image } from 'expo-image';
 import { ArrowLeft, Camera, ImageIcon, LocateFixed, MapPin, X } from 'lucide-react-native';
 import React, { useRef, useState } from 'react';
@@ -23,6 +21,20 @@ import { ICONO_CATEGORIA } from '../components/iconos';
 import { Categoria, CATEGORIAS } from '../constants/mock';
 import { Colors, Peana, Radius, Spacing, Type } from '../constants/theme';
 import { createPlace } from '../lib/queries/places';
+
+// Carga segura de módulos nativos para evitar colapsar la inicialización en Expo Go
+let ImagePicker: any = null;
+let Location: any = null;
+try {
+  ImagePicker = require('expo-image-picker');
+} catch (e) {
+  console.warn('expo-image-picker no disponible en el cliente nativo actual.');
+}
+try {
+  Location = require('expo-location');
+} catch (e) {
+  console.warn('expo-location no disponible en el cliente nativo actual.');
+}
 
 /** Región inicial: El Salvador completo. */
 const EL_SALVADOR: Region = {
@@ -51,6 +63,13 @@ export default function CrearLugar() {
   const [publicando, setPublicando] = useState(false);
 
   async function usarMiUbicacion() {
+    if (!Location) {
+      Alert.alert(
+        'Módulo no disponible',
+        'El GPS no está disponible en este cliente nativo. Por favor, usa el Build de Desarrollo (no Expo Go) o mueve el mapa manualmente.'
+      );
+      return;
+    }
     setBuscandoUbicacion(true);
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
@@ -67,6 +86,13 @@ export default function CrearLugar() {
   }
 
   async function tomarFoto() {
+    if (!ImagePicker) {
+      Alert.alert(
+        'Cámara no disponible',
+        'El módulo de cámara requiere el Build de Desarrollo. Por favor descarga e instala el APK correspondiente.'
+      );
+      return;
+    }
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Sin permiso', 'Activa el permiso de cámara para tomar la foto.');
@@ -77,6 +103,13 @@ export default function CrearLugar() {
   }
 
   async function elegirDeGaleria() {
+    if (!ImagePicker) {
+      Alert.alert(
+        'Galería no disponible',
+        'El acceso a imágenes requiere el Build de Desarrollo. Por favor descarga e instala el APK correspondiente.'
+      );
+      return;
+    }
     const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
     if (!res.canceled) setFotoUri(res.assets[0].uri);
   }

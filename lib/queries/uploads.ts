@@ -82,7 +82,7 @@ export interface UploadRecord {
 
 export interface UploadPhotoResult {
   upload: UploadRecord | null;
-  targetName?: string;
+  targetName?: string | null;
   error: string | null;
 }
 

@@ -1,7 +1,7 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { LucideIcon, Mountain, Plus, Users } from 'lucide-react-native';
-import React, { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { LucideIcon, Mountain, Plus, Users, Globe } from 'lucide-react-native';
+import React, { useCallback, useRef, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import MapView, { Circle, Marker, UrlTile } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChipCapa } from '../../components/ChipCapa';
@@ -35,6 +35,8 @@ const CAPAS: { id: Capa; etiqueta: string; Icono: LucideIcon; disponible: boolea
 /** Pantalla 6 — Mapa full con selector de capas (el corazón del digital twin). */
 export default function Mapa() {
   const router = useRouter();
+  const mapRef = useRef<MapView>(null);
+  const [mapa3D, setMapa3D] = useState(false);
   const [capasActivas, setCapasActivas] = useState<Set<Capa>>(new Set(['oficiales', 'comunidad']));
   const [lugares, setLugares] = useState<Place[]>([]);
   const [negocios, setNegocios] = useState<Business[]>([]);
@@ -58,18 +60,55 @@ export default function Mapa() {
     });
   }
 
+  function alternar3D() {
+    const nuevo3D = !mapa3D;
+    setMapa3D(nuevo3D);
+    if (nuevo3D) {
+      // Inclinación 3D satelital (vista aérea Google Earth) en el Divino Salvador
+      mapRef.current?.animateCamera(
+        {
+          center: { latitude: 13.7013, longitude: -89.2247 },
+          pitch: 55, // Inclinación en 3D
+          heading: 30, // Rotación para efecto de profundidad
+          zoom: 16, // Zoom cercano
+        },
+        { duration: 1200 }
+      );
+    } else {
+      // Vista plana estándar de El Salvador completo
+      mapRef.current?.animateCamera(
+        {
+          center: { latitude: EL_SALVADOR.latitude, longitude: EL_SALVADOR.longitude },
+          pitch: 0,
+          heading: 0,
+          zoom: 8.5,
+        },
+        { duration: 1000 }
+      );
+    }
+  }
+
   const oficiales = lugares.filter((l) => !esComunidad(l));
   const comunidad = lugares.filter(esComunidad);
 
   return (
     <View style={styles.pantalla}>
-      <MapView style={StyleSheet.absoluteFill} initialRegion={EL_SALVADOR}>
-        <UrlTile
-          urlTemplate="https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
-          shouldReplaceMapContent={true}
-          maximumZ={19}
-          tileSize={256}
-        />
+      <MapView
+        ref={mapRef}
+        style={StyleSheet.absoluteFill}
+        initialRegion={EL_SALVADOR}
+        mapType={mapa3D ? 'hybrid' : 'standard'}
+        showsBuildings={true}
+        pitchEnabled={true}
+        rotateEnabled={true}>
+        {!mapa3D && (
+          <UrlTile
+            urlTemplate="https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
+            shouldReplaceMapContent={true}
+            maximumZ={19}
+            tileSize={256}
+          />
+        )}
         {capasActivas.has('oficiales') &&
           oficiales.map((l) => (
             <Marker
@@ -143,6 +182,18 @@ export default function Mapa() {
         </ScrollView>
       </SafeAreaView>
 
+      {/* Botón de alternancia de vista 3D Satélite (Google Earth) */}
+      <Pressable
+        onPress={alternar3D}
+        style={({ pressed }) => [
+          styles.boton3D,
+          mapa3D && { backgroundColor: Colors.acento, borderBottomColor: Colors.acento },
+          pressed && { transform: [{ translateY: 2 }], borderBottomWidth: 2 },
+        ]}>
+        <Globe size={22} color={Colors.superficie} strokeWidth={2.4} />
+        <Text style={styles.boton3DTexto}>{mapa3D ? '2D' : '3D'}</Text>
+      </Pressable>
+
       {/* FAB: crear lugar nuevo (pivote Fase 3) */}
       <Pressable
         onPress={() => router.push('/crear-lugar')}
@@ -160,6 +211,25 @@ const styles = StyleSheet.create({
     gap: Spacing.s,
     paddingHorizontal: Spacing.m,
     paddingVertical: Spacing.s,
+  },
+  boton3D: {
+    position: 'absolute',
+    right: Spacing.l,
+    bottom: Spacing.l + 72, // Colocado justo arriba del FAB "+"
+    width: 58,
+    height: 58,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.primario,
+    borderBottomWidth: Peana.grosor,
+    borderBottomColor: Colors.primarioOscuro,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  boton3DTexto: {
+    fontSize: 9,
+    color: Colors.superficie,
+    fontWeight: 'bold',
   },
   fab: {
     position: 'absolute',
