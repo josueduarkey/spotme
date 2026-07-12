@@ -708,21 +708,6 @@ create trigger on_place_verification_gamify
   after update on public.places
   for each row execute function public.handle_place_verification_gamify();
 
--- =============== RECONCILIACIÓN DE PUNTOS ===============
--- Recalcula profiles.points desde los hechos (fotos, lugares, retos) con las
--- reglas oficiales: 25/foto + 50/lugar comunidad + points_reward por reto
--- completado. Idempotente: corrige cualquier saldo inflado por versiones
--- anteriores de los triggers y deja el sistema auto-consistente.
-update public.profiles pr
-set points =
-  coalesce((select count(*) * 25 from public.uploads u where u.user_id = pr.id), 0)
-  + coalesce((select count(*) * 50 from public.places p
-              where p.created_by = pr.id and p.source = 'community'), 0)
-  + coalesce((select sum(c.points_reward)
-              from public.user_challenges uc
-              join public.challenges c on c.id = uc.challenge_id
-              where uc.user_id = pr.id and uc.status = 'completed'), 0);
-
 -- =============== FASE 6: eventos comunitarios, ratings y comentarios ===============
 -- La comunidad ya crea lugares; ahora también EVENTOS, con el mismo modelo de
 -- confianza (3 confirmaciones → verificado). Además: rating 1-5 al confirmar
@@ -851,3 +836,43 @@ drop policy if exists "comment_reactions_delete_own" on public.comment_reactions
 create policy "comment_reactions_delete_own" on public.comment_reactions
   for delete to authenticated
   using ((select auth.uid()) = user_id);
+
+-- =============== GAMIFICACIÓN: puntos por crear eventos (+40) ===============
+-- Mismo criterio del pagador único: los puntos base los paga el trigger del
+-- hecho (foto 25, lugar 50, evento 40); los retos, on_challenge_points.
+
+create or replace function public.handle_new_event()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.source = 'community' and new.created_by is not null then
+    update public.profiles set points = points + 40 where id = new.created_by;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_new_event on public.events;
+create trigger on_new_event
+  after insert on public.events
+  for each row execute function public.handle_new_event();
+
+-- =============== RECONCILIACIÓN DE PUNTOS ===============
+-- Recalcula profiles.points desde los hechos (fotos, lugares, eventos, retos)
+-- con las reglas oficiales: 25/foto + 50/lugar comunidad + 40/evento comunidad
+-- + points_reward por reto completado. Idempotente; vive al FINAL del archivo
+-- porque referencia columnas que las secciones anteriores agregan.
+update public.profiles pr
+set points =
+  coalesce((select count(*) * 25 from public.uploads u where u.user_id = pr.id), 0)
+  + coalesce((select count(*) * 50 from public.places p
+              where p.created_by = pr.id and p.source = 'community'), 0)
+  + coalesce((select count(*) * 40 from public.events e
+              where e.created_by = pr.id and e.source = 'community'), 0)
+  + coalesce((select sum(c.points_reward)
+              from public.user_challenges uc
+              join public.challenges c on c.id = uc.challenge_id
+              where uc.user_id = pr.id and uc.status = 'completed'), 0);

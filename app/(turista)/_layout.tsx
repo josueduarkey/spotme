@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { House, Map as MapIcon, User } from 'lucide-react-native';
+import { House, Map as MapIcon, Trophy, User } from 'lucide-react-native';
 import React from 'react';
 import { Colors, Fonts } from '../../constants/theme';
 
@@ -33,6 +33,13 @@ export default function TuristaLayout() {
       />
       {/* El gemelo 3D ya no es tab: vive dentro del tab Mapa (switch 2D/3D) */}
       <Tabs.Screen name="gemelo-3d" options={{ href: null }} />
+      <Tabs.Screen
+        name="ranking"
+        options={{
+          title: 'Ranking',
+          tabBarIcon: ({ color }) => <Trophy size={22} color={color} strokeWidth={2.2} />,
+        }}
+      />
       <Tabs.Screen
         name="perfil"
         options={{
