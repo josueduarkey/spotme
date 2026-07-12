@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Award, CheckCircle, Compass, LogOut, MapPin, Camera, User, Trophy, BookOpen, Layers } from 'lucide-react-native';
+import { Award, CheckCircle, Compass, LogOut, MapPin, Camera, User, Trophy, BookOpen, Layers, ChevronRight } from 'lucide-react-native';
 import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -85,6 +85,18 @@ export default function Perfil() {
           </View>
           <Trophy size={36} color={Colors.amarilloSol} strokeWidth={1.8} />
         </View>
+
+        {/* Acceso al panel de inteligencia territorial (pantalla 17) */}
+        <Pressable onPress={() => router.push('/insights')} style={styles.tarjetaInsight}>
+          <View style={styles.insightIcono}>
+            <Layers size={20} color={Colors.superficie} strokeWidth={2.2} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.insightTitulo}>Inteligencia Territorial</Text>
+            <Text style={styles.insightSubtitulo}>Dónde crece el twin y hay oportunidad real</Text>
+          </View>
+          <ChevronRight size={20} color={Colors.textoSuave} />
+        </Pressable>
 
         {/* Grid de Estadísticas Territoriales */}
         <Text style={styles.seccionTitulo}>Tu Huella en el Gemelo Digital</Text>
@@ -249,6 +261,38 @@ const styles = StyleSheet.create({
     color: Colors.texto,
     fontFamily: Fonts.display,
     marginTop: Spacing.s,
+  },
+  tarjetaInsight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.m,
+    backgroundColor: Colors.superficie,
+    borderRadius: Radius.m,
+    borderWidth: 1.5,
+    borderColor: Colors.borde,
+    borderBottomWidth: Peana.grosor,
+    borderBottomColor: Colors.bordeOscuro,
+    padding: Spacing.m,
+  },
+  insightIcono: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.s,
+    backgroundColor: Colors.primario,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  insightTitulo: {
+    ...Type.cuerpoDestacado,
+    fontSize: 15,
+    color: Colors.texto,
+    fontFamily: Fonts.cuerpoBold,
+  },
+  insightSubtitulo: {
+    ...Type.nota,
+    fontSize: 12,
+    color: Colors.textoSuave,
+    marginTop: 2,
   },
   gridStats: {
     flexDirection: 'row',

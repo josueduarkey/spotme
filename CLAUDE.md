@@ -62,6 +62,14 @@ Hackathon de Turismo Creativo Vol. 1 — PoC construido en 2 días con dos cuent
 - **Capas en el gemelo 3D (rúbrica)**: el tab "3D Real" ahora tiene los chips Lugares/Negocios/Actividad y renderiza las 3 capas en Cesium (pines de negocios azules clickeables → ficha, círculos de actividad por peso). Toggle por postMessage sin recargar el globo.
 - Guarda anti-fantasmas: `createPlace` rechaza coordenadas fuera de El Salvador (un emulador en EE.UU. había creado un lugar en San Francisco — borrado).
 
+**Fase 5 — Cuenta A: EN PROGRESO 🚧 (2026-07-12)**
+
+- **Pantalla 17 (inteligencia territorial) hecha** (`app/insights.tsx`): consume `getTerritorialInsight()`, muestra el insight de oportunidad + frase de actividad + barras por departamento cruzando fotos × lugares de comunidad × negocios, con badge "Oportunidad" donde hay demanda y poca oferta. Estilo peana/torogoz consistente. Entrada desde el **perfil** (tarjeta "Inteligencia Territorial"). Cierra el ítem de rúbrica del panel de insight cruzando ≥2 capas.
+- **Puente lat/lng → crear-lugar** (`app/crear-lugar.tsx`): acepta params `lat`/`lng` (`useLocalSearchParams`); habilita "tocar coordenada → crear ahí" desde el mapa 2D o el gemelo 3D. Sin params, flujo original intacto.
+- **Escaparate 3D Centro Histórico** (`app/(turista)/gemelo-3d.tsx`): vista inicial + botón sobre Plaza Cívica (Catedral/Palacio/Plaza Libertad), hitos dorados, y mira central + "Crear aquí" que lee la coordenada real sobre los 3D Tiles y enruta al puente. (Pendiente: pulir estética del panel 3D — feedback del usuario.)
+- **Decisión de stack**: se descartó @rnmapbox/maps a propósito (evita rebuild nativo y no perder Expo Go en iPhone); el twin usa react-native-maps + Cesium. El 3D depende de la Map Tiles API habilitada en la key de Google.
+- ⏳ Pendiente Cuenta A: montar barra de búsqueda (`searchPlaces`) en mapa/crear-lugar; acceso a insights también desde el mapa.
+
 **Fase 6 — pendiente (pulido y demo):** contenido curado, prueba E2E del recorrido completo en dispositivo, guion de demo. Nota: las capas 3D nuevas son JS puro — llegan por Metro sin rebuild del APK.
 
 **🔄 PIVOTE (2026-07-11): la Fase 3 ahora incluye crear lugares desde cero, no solo subir fotos a lugares existentes.** Ver sección 0 para la justificación completa (esto refuerza el digital twin, no lo diluye) y sección 9 para los prompts actualizados de Cuenta A y Cuenta B. Cambios de modelo de datos: `places` ganó `source`, `created_by`, `verification_count`, `is_verified`; nueva tabla `place_verifications`. Cambios de pantallas: nueva pantalla 7b "Crear lugar nuevo"; pantalla 7 (ficha) gana botón "Confirmar que existe" para lugares sin verificar. Usar los prompts de la sección 9, no los de la sección 8 (esos ya están completados).
