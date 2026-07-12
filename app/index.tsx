@@ -1,10 +1,10 @@
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Boton } from '../components/Boton';
-import { MotivoCapas } from '../components/MotivoCapas';
 import { Wordmark } from '../components/Wordmark';
 import { esAdmin } from '../constants/admins';
 import { Colors, Spacing, Type } from '../constants/theme';
@@ -64,16 +64,12 @@ export default function Splash() {
     <SafeAreaView style={styles.pantalla}>
       <View style={styles.centro}>
         <Animated.View entering={FadeInDown.duration(700)}>
-          <MotivoCapas tamano={110} />
+          <Image source={require('../assets/logo-final.png')} style={styles.logo} contentFit="contain" />
         </Animated.View>
         <Animated.View entering={FadeInUp.duration(700).delay(250)} style={styles.marca}>
           <Wordmark tamano={52} claro />
           <Text style={styles.lema}>El Salvador, capa por capa</Text>
         </Animated.View>
-        <Animated.Text entering={FadeInUp.duration(700).delay(500)} style={styles.descripcion}>
-          Un mapa vivo del país: lugares, negocios locales y la huella real de
-          quienes lo recorren.
-        </Animated.Text>
       </View>
       <Animated.View entering={FadeInUp.duration(700).delay(700)} style={styles.pie}>
         <Boton titulo="Comenzar" onPress={() => router.push('/auth')} />
@@ -87,11 +83,6 @@ const styles = StyleSheet.create({
   centro: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.xl, paddingHorizontal: Spacing.xl },
   marca: { alignItems: 'center', gap: Spacing.s },
   lema: { ...Type.nota, fontSize: 15, color: Colors.amarilloSol, letterSpacing: 0.4 },
-  descripcion: {
-    ...Type.cuerpo,
-    color: Colors.textoInvertido,
-    textAlign: 'center',
-    opacity: 0.85,
-  },
+  logo: { width: 190, height: 143 },
   pie: { paddingHorizontal: Spacing.l, paddingBottom: Spacing.l },
 });

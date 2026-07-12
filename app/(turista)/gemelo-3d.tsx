@@ -1,7 +1,7 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Globe, MapPin, Compass, Landmark, Plus, Crosshair } from 'lucide-react-native';
+import { Globe, MapPin, Compass, Landmark, Plus, Crosshair, Building2, Search } from 'lucide-react-native';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Carga segura del módulo nativo de WebView. El require con string literal deja
@@ -18,6 +18,7 @@ try {
 import { getPlaces } from '../../lib/queries/places';
 import { getBusinesses } from '../../lib/queries/businesses';
 import { getActivityPoints } from '../../lib/queries/activity';
+import { searchPlaces } from '../../lib/queries/search';
 import { ActivityPoint, Business, Place } from '../../constants/mock';
 import { Colors, Radius, Spacing, Type, Fonts, Peana } from '../../constants/theme';
 import { ChipCapa } from '../../components/ChipCapa';
@@ -25,11 +26,20 @@ import { IconoActividad, IconoNegocio } from '../../components/iconos';
 import { Mountain } from 'lucide-react-native';
 import Constants from 'expo-constants';
 
-type Capa3D = 'lugares' | 'negocios' | 'actividad';
+type Capa3D = 'lugares' | 'negocios' | 'actividad' | 'edificios';
 
 // Recuperar API Key activa
 const GOOGLE_MAPS_API_KEY =
   Constants.expoConfig?.android?.config?.googleMaps?.apiKey || 'AIzaSyBE5rKSq03ZEN8tlGbSaQhOnGgf6IIEoJ4';
+
+// Cesium OSM Buildings: volúmenes 3D reales por edificio (huella + altura de
+// OpenStreetMap), cobertura mundial — es lo que hace que el Centro Histórico
+// se vea "modelado" de verdad al acercarse, más allá del mallado satelital
+// de Google (cuya resolución varía fuera de las ciudades insignia). Requiere
+// un token gratuito de Cesium ion (ion.cesium.com/tokens → Add a token, sin
+// necesidad de cuenta de pago); sin token, esta capa simplemente no se ofrece
+// y el resto del gemelo 3D sigue funcionando igual.
+const CESIUM_ION_TOKEN = process.env.EXPO_PUBLIC_CESIUM_ION_TOKEN || '';
 
 // Centro Histórico de San Salvador — el escaparate principal del gemelo 3D.
 // Coordenadas oficiales del equipo (13°41′51″ N, 89°11′25″ O).
@@ -80,9 +90,18 @@ export default function Gemelo3D() {
   const [lugares, setLugares] = useState<Place[]>([]);
   const [negocios, setNegocios] = useState<Business[]>([]);
   const [actividad, setActividad] = useState<ActivityPoint[]>([]);
-  // Las 3 capas del twin arrancan visibles: la lectura cruzada es el punto.
-  const [capasActivas, setCapasActivas] = useState<Set<Capa3D>>(new Set(['lugares', 'negocios', 'actividad']));
+  // Las capas del twin arrancan visibles: la lectura cruzada es el punto.
+  // 'edificios' solo se activa por defecto si hay token de Cesium ion.
+  const [capasActivas, setCapasActivas] = useState<Set<Capa3D>>(
+    new Set(
+      CESIUM_ION_TOKEN
+        ? ['lugares', 'negocios', 'actividad', 'edificios']
+        : ['lugares', 'negocios', 'actividad'],
+    ),
+  );
   const [cargando, setCargando] = useState(true);
+  const [busqueda, setBusqueda] = useState('');
+  const [buscando, setBuscando] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -121,6 +140,21 @@ export default function Gemelo3D() {
   /** Vuela la cámara 3D al Centro Histórico (nuestro escaparate principal). */
   function irCentroHistorico() {
     webViewRef.current?.postMessage(JSON.stringify({ type: 'fly_centro' }));
+  }
+
+  /** Busca un lugar (catálogo real de Google/Nominatim) y vuela ahí en 3D. */
+  async function buscarLugar() {
+    const q = busqueda.trim();
+    if (!q) return;
+    setBuscando(true);
+    const resultados = await searchPlaces(q);
+    setBuscando(false);
+    const primero = resultados[0];
+    if (!primero) {
+      Alert.alert('Sin resultados', `No se encontró "${q}" en El Salvador.`);
+      return;
+    }
+    webViewRef.current?.postMessage(JSON.stringify({ type: 'fly_to', lat: primero.lat, lng: primero.lng }));
   }
 
   /** Pide a Cesium la coordenada real bajo la mira central del globo 3D. */
@@ -212,7 +246,9 @@ export default function Gemelo3D() {
         <script>
           (async () => {
             const API_KEY = "${GOOGLE_MAPS_API_KEY}";
-            
+            const CESIUM_ION_TOKEN = "${CESIUM_ION_TOKEN}";
+            if (CESIUM_ION_TOKEN) Cesium.Ion.defaultAccessToken = CESIUM_ION_TOKEN;
+
             // Inicializar visor Cesium limpio sin barras de controles web
             const viewer = new Cesium.Viewer('cesiumContainer', {
               animation: false,
@@ -242,6 +278,20 @@ export default function Gemelo3D() {
               console.error("Error al cargar 3D Tiles:", error);
               const loader = document.getElementById('loading');
               if (loader) loader.innerText = 'No se pudieron cargar los tiles 3D. Revisa conexión o la Map Tiles API.';
+            }
+
+            // Cesium OSM Buildings: edificios reales (huella + altura de OSM) en
+            // volumen 3D real, no solo mallado satelital — se nota especialmente
+            // al acercarse al Centro Histórico. Requiere token de Cesium ion.
+            let edificiosTileset = null;
+            if (CESIUM_ION_TOKEN) {
+              try {
+                edificiosTileset = await Cesium.createOsmBuildingsAsync();
+                edificiosTileset.show = ${capasActivas.has('edificios') ? 'true' : 'false'};
+                viewer.scene.primitives.add(edificiosTileset);
+              } catch (error) {
+                console.error('Error al cargar OSM Buildings:', error);
+              }
             }
 
             // Ocultar cargador
@@ -416,11 +466,16 @@ export default function Gemelo3D() {
               };
             }
 
-            // Handler para mensajes del contenedor móvil (React Native)
-            window.addEventListener('message', (event) => {
+            // Handler para mensajes del contenedor móvil (React Native).
+            // OJO: en Android el WebView entrega postMessage en 'document', en
+            // iOS en 'window' — hay que escuchar en los dos o los botones
+            // (Centro Histórico, Crear aquí, toggles) mueren en Android.
+            const onNativeMessage = (event) => {
               try {
                 const data = JSON.parse(event.data);
-                if (data.type === 'toggle_layer' && layers[data.layer]) {
+                if (data.type === 'toggle_layer' && data.layer === 'edificios') {
+                  if (edificiosTileset) edificiosTileset.show = !!data.visible;
+                } else if (data.type === 'toggle_layer' && layers[data.layer]) {
                   for (const e of layers[data.layer]) e.show = !!data.visible;
                 }
                 if (data.type === 'fly_centro') {
@@ -451,7 +506,9 @@ export default function Gemelo3D() {
               } catch (e) {
                 console.error(e);
               }
-            });
+            };
+            window.addEventListener('message', onNativeMessage);
+            document.addEventListener('message', onNativeMessage);
           })();
         </script>
       </body>
@@ -475,8 +532,27 @@ export default function Gemelo3D() {
         </View>
       </View>
 
+      {/* Buscador — vuela la cámara 3D al lugar encontrado (Google/Nominatim) */}
+      <View style={styles.buscador}>
+        <Search size={16} color={Colors.textoSuave} strokeWidth={2.2} />
+        <TextInput
+          style={styles.buscadorInput}
+          placeholder="Buscar un lugar en El Salvador..."
+          placeholderTextColor={Colors.textoSuave}
+          value={busqueda}
+          onChangeText={setBusqueda}
+          onSubmitEditing={buscarLugar}
+          returnKeyType="search"
+        />
+        {buscando && <ActivityIndicator size="small" color={Colors.primario} />}
+      </View>
+
       {/* Selector de capas del twin — el cruce de ≥2 capas también vive en 3D (rúbrica) */}
-      <View style={styles.capas3d}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.capas3dWrap}
+        contentContainerStyle={styles.capas3d}>
         <ChipCapa
           etiqueta="Lugares"
           Icono={Mountain}
@@ -495,7 +571,25 @@ export default function Gemelo3D() {
           activa={capasActivas.has('actividad')}
           onPress={() => alternarCapa('actividad')}
         />
-      </View>
+        {!!CESIUM_ION_TOKEN && (
+          <ChipCapa
+            etiqueta="Edificios 3D"
+            Icono={Building2}
+            activa={capasActivas.has('edificios')}
+            onPress={() => alternarCapa('edificios')}
+          />
+        )}
+      </ScrollView>
+
+      {!CESIUM_ION_TOKEN && (
+        <View style={styles.avisoToken}>
+          <Building2 size={14} color={Colors.acento} strokeWidth={2.2} />
+          <Text style={styles.avisoTokenTexto}>
+            Falta el token gratuito de Cesium ion para ver edificios 3D reales del Centro Histórico
+            (EXPO_PUBLIC_CESIUM_ION_TOKEN en .env — sin costo, en ion.cesium.com/tokens).
+          </Text>
+        </View>
+      )}
 
       {/* Visor 3D */}
       <View style={styles.visorContainer}>
@@ -623,8 +717,37 @@ const styles = StyleSheet.create({
     color: Colors.texto,
     fontFamily: Fonts.cuerpoBold,
   },
+  capas3dWrap: {
+    flexGrow: 0,
+    backgroundColor: Colors.superficie,
+    borderBottomWidth: 1.5,
+    borderBottomColor: Colors.borde,
+  },
   capas3d: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.s,
+    paddingHorizontal: Spacing.l,
+    paddingVertical: Spacing.s,
+  },
+  buscador: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.s,
+    marginHorizontal: Spacing.l,
+    marginTop: Spacing.s,
+    marginBottom: Spacing.xs,
+    paddingHorizontal: Spacing.m,
+    height: 44,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.fondo,
+    borderWidth: 1.5,
+    borderColor: Colors.borde,
+  },
+  buscadorInput: { flex: 1, ...Type.cuerpo, fontSize: 14, color: Colors.texto, padding: 0 },
+  avisoToken: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.s,
     paddingHorizontal: Spacing.l,
     paddingVertical: Spacing.s,
@@ -632,6 +755,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1.5,
     borderBottomColor: Colors.borde,
   },
+  avisoTokenTexto: { ...Type.nota, fontSize: 11, color: Colors.textoSuave, flex: 1, lineHeight: 15 },
   fallback: {
     flex: 1,
     justifyContent: 'center',

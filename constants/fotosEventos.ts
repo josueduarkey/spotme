@@ -11,8 +11,8 @@
 export const FOTOS_POR_EVENTO: Record<string, any[]> = {
   'Festival Gastronómico de Juayúa': [require('../assets/ruta-flores.jpg')],
   'Noche de Museos': [require('../assets/salvador-mundo.jpg')],
-  // 'Torneo de Surf El Tunco': [require('../assets/eventos/surf-tunco-1.jpg')],
-  // 'Feria del Añil': [require('../assets/eventos/feria-anil-1.jpg')],
+  'Torneo de Surf El Tunco': [require('../assets/surf-city.jpg')],
+  'Feria del Añil': [require('../assets/feria-anil.jpg')],
 };
 
 /** Fotos de ediciones pasadas del evento; [] si aún no hay curadas. */

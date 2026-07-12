@@ -1,14 +1,16 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
-import { ArrowLeft, BadgeCheck, Clock, MapPin, Phone, Sparkles } from 'lucide-react-native';
+import { ArrowLeft, BadgeCheck, Clock, ExternalLink, MapPin, Phone, Sparkles } from 'lucide-react-native';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Boton } from '../../components/Boton';
 import { ICONO_CATEGORIA, IconoNegocio } from '../../components/iconos';
-import { getFotoLugar } from '../../constants/fotosLugares';
+import { IconoTikTok } from '../../components/IconoTikTok';
+import { VisorFotos } from '../../components/VisorFotos';
+import { getFotoLugar, getFotosLugar } from '../../constants/fotosLugares';
 import { Business, CATEGORIAS, esComunidad, Place } from '../../constants/mock';
-import { Colors, Peana, Radius, Spacing, Type } from '../../constants/theme';
+import { Colors, Fonts, Peana, Radius, Spacing, Type } from '../../constants/theme';
 import { getBusinessById } from '../../lib/queries/businesses';
 import { confirmPlace, getPlaceById } from '../../lib/queries/places';
 import { getPhotosFor } from '../../lib/queries/uploads';
@@ -23,6 +25,7 @@ export default function Ficha() {
   const [fotos, setFotos] = useState<string[]>([]);
   const [confirmando, setConfirmando] = useState(false);
   const [yaConfirmo, setYaConfirmo] = useState(false);
+  const [fotoAbierta, setFotoAbierta] = useState<number | null>(null);
 
   useEffect(() => {
     if (esNegocio) getBusinessById(id).then(setNegocio);
@@ -52,6 +55,25 @@ export default function Ficha() {
   const portadaUrl = !esNegocio ? (item as Place).coverImageUrl : null;
   const fotoLocal = !esNegocio ? getFotoLugar(item.name) : null;
   const fuentePortada = portadaUrl ? { uri: portadaUrl } : fotoLocal;
+  const fotosCuradas = !esNegocio ? getFotosLugar(item.name) : [];
+
+  // Todas las fotos del lugar, en el mismo orden en que se muestran, para que
+  // tocar cualquiera (portada, curadas o de la comunidad) abra el visor de
+  // pantalla completa en el índice correcto.
+  const galeriaCompleta = [
+    ...(portadaUrl ? [{ uri: portadaUrl }] : []),
+    ...fotosCuradas,
+    ...fotos.map((url) => ({ uri: url })),
+  ];
+  const offsetCuradas = portadaUrl ? 1 : 0;
+  const offsetComunidad = offsetCuradas + fotosCuradas.length;
+
+  function verEnTikTok() {
+    const query = encodeURIComponent(`${item!.name} El Salvador`);
+    Linking.openURL(`https://www.tiktok.com/search?q=${query}`).catch(() =>
+      Alert.alert('No se pudo abrir TikTok', 'Intenta de nuevo más tarde.'),
+    );
+  }
 
   function comoLlegar() {
     // La ruta se traza dentro de la app (OSRM); Google Maps queda como
@@ -95,7 +117,9 @@ export default function Ficha() {
     <View style={styles.pantalla}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: Spacing.xl }}>
         {fuentePortada ? (
-          <Image source={fuentePortada} style={styles.portadaFoto} contentFit="cover" />
+          <Pressable onPress={() => setFotoAbierta(0)}>
+            <Image source={fuentePortada} style={styles.portadaFoto} contentFit="cover" />
+          </Pressable>
         ) : (
           <View style={styles.portada}>
             <IconoPortada size={72} color={Colors.primario} strokeWidth={1.5} />
@@ -128,12 +152,19 @@ export default function Ficha() {
           </View>
           <Text style={styles.descripcion}>{item.description}</Text>
 
-          {fotos.length > 0 && (
+          {(fotosCuradas.length > 0 || fotos.length > 0) && (
             <View style={{ gap: Spacing.s, marginTop: Spacing.s }}>
               <Text style={styles.galeriaTitulo}>Fotos de la comunidad</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.s }}>
-                {fotos.map((url) => (
-                  <Image key={url} source={{ uri: url }} style={styles.galeriaFoto} contentFit="cover" />
+                {fotosCuradas.map((f, i) => (
+                  <Pressable key={`curada-${i}`} onPress={() => setFotoAbierta(offsetCuradas + i)}>
+                    <Image source={f} style={styles.galeriaFoto} contentFit="cover" />
+                  </Pressable>
+                ))}
+                {fotos.map((url, i) => (
+                  <Pressable key={url} onPress={() => setFotoAbierta(offsetComunidad + i)}>
+                    <Image source={{ uri: url }} style={styles.galeriaFoto} contentFit="cover" />
+                  </Pressable>
                 ))}
               </ScrollView>
             </View>
@@ -167,6 +198,19 @@ export default function Ficha() {
             </View>
           )}
 
+          <Pressable onPress={verEnTikTok} style={styles.cajaTiktok}>
+            <View style={styles.tiktokIcono}>
+              <IconoTikTok size={20} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.tiktokTitulo}>Ver en TikTok</Text>
+              <Text style={styles.tiktokNota} numberOfLines={1}>
+                Videos de otros viajeros en &quot;{item.name}&quot;
+              </Text>
+            </View>
+            <ExternalLink size={18} color={Colors.textoSuave} />
+          </Pressable>
+
           <View style={styles.acciones}>
             <Boton titulo="Cómo llegar" onPress={comoLlegar} variante={comunidad && !verificado ? 'secundario' : 'primario'} />
             <Boton titulo="Subir foto" variante="secundario" onPress={subirFoto} />
@@ -179,6 +223,13 @@ export default function Ficha() {
           <ArrowLeft size={20} color={Colors.texto} />
         </Pressable>
       </SafeAreaView>
+
+      <VisorFotos
+        fotos={galeriaCompleta}
+        indiceInicial={fotoAbierta ?? 0}
+        visible={fotoAbierta !== null}
+        onClose={() => setFotoAbierta(null)}
+      />
     </View>
   );
 }
@@ -259,6 +310,31 @@ const styles = StyleSheet.create({
   },
   confirmarTitulo: { ...Type.subtitulo, fontSize: 18, color: Colors.texto },
   confirmarNota: { ...Type.nota, color: Colors.textoSuave },
+  cajaTiktok: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.m,
+    backgroundColor: Colors.superficie,
+    borderRadius: Radius.m,
+    borderWidth: 1.5,
+    borderColor: Colors.borde,
+    borderBottomWidth: Peana.grosor,
+    borderBottomColor: Colors.bordeOscuro,
+    padding: Spacing.m,
+    marginTop: Spacing.m,
+  },
+  tiktokIcono: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.s,
+    backgroundColor: Colors.superficie,
+    borderWidth: 1.5,
+    borderColor: Colors.borde,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tiktokTitulo: { ...Type.cuerpoDestacado, fontSize: 15, color: Colors.texto, fontFamily: Fonts.cuerpoBold },
+  tiktokNota: { ...Type.nota, fontSize: 12, color: Colors.textoSuave, marginTop: 2 },
   acciones: { gap: Spacing.m, marginTop: Spacing.l },
   superpuesto: { position: 'absolute', top: 0, left: 0 },
   volver: {
