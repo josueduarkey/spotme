@@ -132,3 +132,13 @@ export async function setAccountType(userId: string, accountType: AccountType): 
   return { error: error ? toSpanish(error.message) : null };
 }
 
+export async function signOut(): Promise<{ error: string | null }> {
+  if (!isSupabaseConfigured) {
+    await delay(300);
+    return { error: null };
+  }
+
+  const { error } = await getSupabase().auth.signOut();
+  return { error: error ? error.message : null };
+}
+

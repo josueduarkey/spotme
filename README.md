@@ -335,9 +335,9 @@ La aplicación tiene implementada y verificada de extremo a extremo la lógica d
 | Asociación automática de fotos al lugar más cercano | ✅ Completado | Fase 3 |
 | Gemelo Digital 3D Real (Google Earth Tiles + Cesium) | ✅ Completado | Fase 3 |
 | Planeación de rutas multiparadas (OSRM) | ✅ Completado | Fase 4 |
-| Registro de ubicación y datos de negocio | 🚧 Pendiente | Fase 4 |
-| Dashboard de métricas del comercio | 🚧 Pendiente | Fase 4 |
-| Gamificación (Retos, Puntos y Perfil) | 🚧 Pendiente | Fase 5 |
+| Registro de ubicación y datos de negocio | ✅ Completado | Fase 4 |
+| Dashboard de métricas del comercio | ✅ Completado | Fase 4 |
+| Gamificación (Retos, Puntos y Perfil) | ✅ Completado | Fase 5 |
 | Panel de Inteligencia Territorial (Insights) | 🚧 Pendiente | Fase 5 |
 | Pulido final y preparación de demo | 🚧 Pendiente | Fase 6 |
 
