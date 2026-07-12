@@ -1,6 +1,6 @@
-import { MapPin } from 'lucide-react-native';
+import { ChevronRight, MapPin } from 'lucide-react-native';
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { EventItem } from '../constants/mock';
 import { Colors, Peana, Radius, Spacing, Type } from '../constants/theme';
 
@@ -8,12 +8,17 @@ const MESES = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'O
 
 interface Props {
   evento: EventItem;
+  /** Abre el detalle del evento (fotos de otros años + ubicación exacta). */
+  onPress?: () => void;
 }
 
-export function TarjetaEvento({ evento }: Props) {
+export function TarjetaEvento({ evento, onPress }: Props) {
   const fecha = new Date(evento.date);
   return (
-    <View style={styles.card}>
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      style={({ pressed }) => [styles.card, pressed && { opacity: 0.9 }]}>
       <View style={styles.fecha}>
         <Text style={styles.fechaDia}>{fecha.getDate()}</Text>
         <Text style={styles.fechaMes}>{MESES[fecha.getMonth()]}</Text>
@@ -30,7 +35,8 @@ export function TarjetaEvento({ evento }: Props) {
           <Text style={styles.departamento}>{evento.department}</Text>
         </View>
       </View>
-    </View>
+      {onPress && <ChevronRight size={18} color={Colors.textoSuave} />}
+    </Pressable>
   );
 }
 

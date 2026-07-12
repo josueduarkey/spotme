@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { Building2, Clock, Edit, LogOut, MapPin, Navigation, Phone, Sparkles, Award, FileText, CheckCircle2 } from 'lucide-react-native';
+import { Building2, ChevronRight, Clock, Edit, Layers, LogOut, MapPin, Navigation, Phone, Sparkles, Award, FileText, CheckCircle2 } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
@@ -304,6 +304,20 @@ export default function BusinessDashboard() {
           </View>
         </View>
 
+        {/* Inteligencia territorial — dónde hay demanda turística sin oferta */}
+        <Pressable onPress={() => router.push('/insights')} style={styles.tarjetaInsights}>
+          <View style={styles.insightsIcono}>
+            <Layers size={20} color={Colors.superficie} strokeWidth={2.2} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.insightsTitulo}>Inteligencia Territorial</Text>
+            <Text style={styles.insightsNota}>
+              Dónde hay turistas activos sin negocios cerca — tu próxima oportunidad.
+            </Text>
+          </View>
+          <ChevronRight size={20} color={Colors.textoSuave} />
+        </Pressable>
+
         {/* Ficha del Negocio */}
         <Text style={[styles.seccionTitulo, { marginTop: Spacing.m }]}>Ficha Comercial Registrada</Text>
         <View style={styles.fichaDetalle}>
@@ -347,6 +361,29 @@ const styles = StyleSheet.create({
   },
   etiqueta: { ...Type.etiqueta, fontSize: 10, color: Colors.acento },
   titulo: { ...Type.cuerpoDestacado, fontSize: 16, color: Colors.texto, fontFamily: Fonts.cuerpoBold },
+  tarjetaInsights: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.m,
+    backgroundColor: Colors.superficie,
+    borderRadius: Radius.m,
+    borderWidth: 1.5,
+    borderColor: Colors.borde,
+    borderBottomWidth: Peana.grosor,
+    borderBottomColor: Colors.bordeOscuro,
+    padding: Spacing.m,
+    marginTop: Spacing.m,
+  },
+  insightsIcono: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.s,
+    backgroundColor: Colors.primario,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  insightsTitulo: { ...Type.cuerpoDestacado, fontSize: 15, color: Colors.texto, fontFamily: Fonts.cuerpoBold },
+  insightsNota: { ...Type.nota, fontSize: 12, color: Colors.textoSuave, marginTop: 2 },
   contenido: { padding: Spacing.l, gap: Spacing.l },
   seccionTitulo: { ...Type.subtitulo, fontSize: 15, color: Colors.texto, fontFamily: Fonts.display },
   nota: { ...Type.nota, color: Colors.textoSuave },

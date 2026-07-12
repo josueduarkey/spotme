@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Camera, Landmark, LogOut, ShieldCheck, Store, Users } from 'lucide-react-native';
+import { Camera, Landmark, Layers, LogOut, ShieldCheck, Store, Users } from 'lucide-react-native';
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
@@ -130,6 +130,12 @@ export default function AdminDashboard() {
             ]}
           />
         </View>
+
+        {/* Inteligencia territorial completa (pantalla 17) */}
+        <Pressable onPress={() => router.push('/insights')} style={styles.cardEnlace}>
+          <Layers size={18} color={Colors.primario} strokeWidth={2.2} />
+          <Text style={styles.cardEnlaceTexto}>Ver inteligencia territorial por departamento</Text>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -193,4 +199,18 @@ const styles = StyleSheet.create({
   },
   cardTitulo: { ...Type.cuerpoDestacado, fontSize: 14, color: Colors.texto, fontFamily: Fonts.cuerpoBold },
   cardNota: { ...Type.nota, fontSize: 12, color: Colors.textoSuave },
+  cardEnlace: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.s,
+    backgroundColor: Colors.superficie,
+    borderRadius: Radius.m,
+    borderWidth: 1.5,
+    borderColor: Colors.borde,
+    borderBottomWidth: Peana.grosor,
+    borderBottomColor: Colors.bordeOscuro,
+    padding: Spacing.m,
+  },
+  cardEnlaceTexto: { ...Type.cuerpoDestacado, fontSize: 13, color: Colors.primario },
 });

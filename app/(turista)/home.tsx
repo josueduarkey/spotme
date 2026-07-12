@@ -38,8 +38,7 @@ export default function Home() {
         <Pressable onPress={() => router.push('/mapa')} style={({ pressed }) => [styles.ctaMapa, pressed && { opacity: 0.92 }]}>
           <View style={{ flex: 1, gap: 4 }}>
             <Text style={styles.ctaEtiqueta}>El Salvador en miniatura</Text>
-            <Text style={styles.ctaTitulo}>Ver el mapa</Text>
-            <Text style={styles.ctaNota}>Lugares, negocios y la huella de otros viajeros, capa por capa.</Text>
+            <Text style={styles.ctaTituloMapa}>Ver el mapa</Text>
           </View>
           <ExpoImage
             source={require('../../assets/diorama-sv.png')}
@@ -78,7 +77,11 @@ export default function Home() {
           <Text style={styles.seccionTitulo}>Eventos próximos</Text>
           <View style={{ gap: Spacing.m, paddingRight: Spacing.l }}>
             {eventos.map((e) => (
-              <TarjetaEvento key={e.id} evento={e} />
+              <TarjetaEvento
+                key={e.id}
+                evento={e}
+                onPress={() => router.push({ pathname: '/evento/[id]', params: { id: e.id } })}
+              />
             ))}
           </View>
         </View>
@@ -98,11 +101,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.m,
     marginHorizontal: Spacing.l,
-    backgroundColor: Colors.tinta,
+    backgroundColor: Colors.superficie,
     borderRadius: Radius.l,
+    borderWidth: 1.5,
+    borderColor: Colors.borde,
     borderBottomWidth: Peana.grosor,
-    borderBottomColor: Colors.tintaOscura,
+    borderBottomColor: Colors.bordeOscuro,
     padding: Spacing.l,
+    minHeight: 150,
   },
   ctaRuta: {
     flexDirection: 'row',
@@ -116,10 +122,10 @@ const styles = StyleSheet.create({
     padding: Spacing.l,
     marginTop: -Spacing.s,
   },
-  ctaEtiqueta: { ...Type.etiqueta, fontSize: 10, color: Colors.azulLago },
-  ctaTitulo: { ...Type.titulo, fontSize: 24, color: Colors.textoInvertido },
-  ctaNota: { ...Type.nota, color: Colors.azulLago },
-  ctaDiorama: { width: 138, height: 92 },
+  ctaEtiqueta: { ...Type.etiqueta, fontSize: 10, color: Colors.acento },
+  ctaTitulo: { ...Type.subtitulo, color: Colors.textoInvertido },
+  ctaTituloMapa: { ...Type.titulo, fontSize: 28, color: Colors.texto },
+  ctaDiorama: { width: 175, height: 117 },
   ctaNotaRuta: { ...Type.nota, color: Colors.fondo },
   iconoViaje: {
     width: 48,
